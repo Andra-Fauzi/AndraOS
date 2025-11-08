@@ -3,6 +3,7 @@
 
 #include "idt.h"
 #include "terminal.h"
+#include "multiboot_header.h"
 
 struct regs {
 	uint32_t gs, fs, es, ds;

@@ -47,8 +47,8 @@ iso: $(TARGET)
 	grub-mkrescue -o $(ISO) isodir
 
 
-run: $(ISO)
-	qemu-system-x86_64 -bios /usr/share/OVMF/OVMF_CODE.fd -cdrom $(ISO) -m 512M -serial stdio -hda disk.img
+run: iso $(ISO) 
+	qemu-system-x86_64 -bios /usr/share/OVMF/OVMF_CODE.fd -cdrom $(ISO) -m 1024M -serial stdio -hda disk.img
 
 
 clean:

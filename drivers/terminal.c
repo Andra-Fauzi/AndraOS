@@ -225,41 +225,43 @@ bool shell_mode = false;
 void print_char(char c, multiboot_info_t *mb_info) {
 	uint64_t VGA_WIDTH = mb_info->framebuffer_width;
 	uint64_t VGA_HEIGHT = mb_info->framebuffer_height;
-    	if (c == '\n') {
-        	terminal_x = 0;
-        	terminal_y += CHAR_HEIGHT;
-    	} else if (c == '\b') {
-        	terminal_x -= CHAR_WIDTH;
-		if(shell_mode != true) {
-			if (terminal_x < 0) {
-            			terminal_x = VGA_WIDTH - CHAR_WIDTH;
-            			terminal_y -= CHAR_HEIGHT;
-            			if (terminal_y < 0){
-					terminal_y = 0;
-				}	
-        		} 		
-		} else if(terminal_x < 0) {
-			terminal_x = 0;
-		}
-
-
-        	// hapus karakter di posisi sebelumnya
-        	for (int y = 0; y < CHAR_SIZE; y++) {
-            		for (int x = 0; x < CHAR_SIZE; x++) {
-                		for (int dy = 0; dy < SCALE; dy++) {
-                    			for (int dx = 0; dx < SCALE; dx++) {
-                        			draw_pixel(mb_info, terminal_x + x*SCALE + dx, terminal_y + y*SCALE + dy, 0x00000000);
-                    			}
-                		}
+    if (c == '\n') {
+        if(shell_mode == true) {
+    	    terminal_x = 1;
+        } else {
+    	    terminal_x = 0;
+        }
+    	terminal_y += CHAR_HEIGHT;
+    } else if (c == '\b') {
+    	terminal_x -= CHAR_WIDTH;
+	    if(shell_mode != true) {
+		    if (terminal_x < 0) {
+            	terminal_x = VGA_WIDTH - CHAR_WIDTH;
+            	terminal_y -= CHAR_HEIGHT;
+            	if (terminal_y < 0){
+		    	    terminal_y = 0;
+		    	} 
+    	    } 		
+	        }  else if(terminal_x <= CHAR_WIDTH) {
+                terminal_x = CHAR_WIDTH;
+            }
+    	// hapus karakter di posisi sebelumnya
+    	for (int y = 0; y < CHAR_SIZE; y++) {
+        		for (int x = 0; x < CHAR_SIZE; x++) {
+            		for (int dy = 0; dy < SCALE; dy++) {
+                			for (int dx = 0; dx < SCALE; dx++) {
+                    			draw_pixel(mb_info, terminal_x + x*SCALE + dx, terminal_y + y*SCALE + dy, 0x00000000);
+                			}
             		}
-        	}
-		return;
+        		}
     	}
+	    return;
+    }
 
-    	if (terminal_x + CHAR_WIDTH > VGA_WIDTH) {
-        	terminal_x = 0;
-        	terminal_y += CHAR_HEIGHT;
-    	}
+    if (terminal_x + CHAR_WIDTH > VGA_WIDTH) {
+    	terminal_x = 0;
+    	terminal_y += CHAR_HEIGHT;
+    }
 
 	if(c >= 0 && c < 128 && c != '\n' && c != '\b') {
 		// gambar karakter
@@ -285,10 +287,10 @@ void print_char(char c, multiboot_info_t *mb_info) {
     	
 
     	
-    	if (terminal_y + CHAR_HEIGHT > VGA_HEIGHT) {
-			scroll_framebuffer(mb_info);
-    			terminal_y -= CHAR_HEIGHT;
-    	}
+    if (terminal_y + CHAR_HEIGHT > VGA_HEIGHT) {
+		scroll_framebuffer(mb_info);
+    		terminal_y -= CHAR_HEIGHT;
+    }
 }
 
 
@@ -298,4 +300,25 @@ void kprint(char* str, multiboot_info_t *mb_info) {
 		print_char(str[i], mb_info);
 		i++;
 	}
+}
+
+void kprint_hex(uintptr_t value, multiboot_info_t *mb_info) {
+    char buffer[17]; // 16 digit + null untuk 64-bit, cukup juga untuk 32-bit
+    const char *hex_chars = "0123456789ABCDEF";
+
+    buffer[0] = '0';
+    buffer[1] = 'x';
+    int i = 2;
+
+    // Untuk 32-bit: loop 8 digit, 64-bit: loop 16 digit
+    int nibbles = sizeof(uintptr_t) * 2;
+
+    for (int j = nibbles - 1; j >= 0; j--) {
+        uint8_t nibble = (value >> (j * 4)) & 0xF;
+        buffer[i++] = hex_chars[nibble];
+    }
+
+    buffer[i] = '\0';
+
+    kprint(buffer, mb_info); // pakai fungsi print string yang sudah kamu punya
 }

@@ -35,5 +35,8 @@ void isr_install() {
 	idt_set_gate(31, (uint32_t)isr31, 0x08, 0x8E);
 }
 
+extern multiboot_info_t *multiboot_info;
+
 void isr_handler(struct regs *r) {
+	kprint("interrupt terjadi", multiboot_info);
 }

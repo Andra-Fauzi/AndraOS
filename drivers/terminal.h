@@ -12,3 +12,4 @@ void print_char(char c, multiboot_info_t *mb_info);
 void kprint(char* str, multiboot_info_t *mb_info);
 void draw_pixel(multiboot_info_t *mb_info, int x, int y, uint32_t color);
 void terminal_init(multiboot_info_t *mb_info);
+void kprint_hex(uintptr_t value, multiboot_info_t *mb_info);

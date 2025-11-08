@@ -11,6 +11,8 @@
 #include "ata.h"
 #include "shell.h"
 #include "multiboot_header.h"
+#include "memory.h"
+#include "paging.h"
 
 #if defined(__linux__)
 #error "You are not using cross compiler you will run to some trouble"
@@ -75,7 +77,7 @@ void draw_fullscreen(multiboot_info_t *mb_info) {
     }
 }
 
-
+multiboot_info_t *multiboot_info;
 
 void kernel_main(multiboot_info_t *mb_info) {
 	if(mb_info == NULL) {
@@ -84,10 +86,13 @@ void kernel_main(multiboot_info_t *mb_info) {
 	if(mb_info->framebuffer_addr == 0) {
 		for (;;) asm("hlt");
 	}
+	multiboot_info = mb_info;
 	gdt_install();
 	idt_install();
 	isr_install();
 	irq_install();
+    	heap_init();
+	//init_paging();
 
 	asm volatile("sti");
 
@@ -106,7 +111,7 @@ void kernel_main(multiboot_info_t *mb_info) {
 	/*
 	for (uint32_t y = 0; y < height; y++) {
 		for (uint32_t x = 0; x < width; x++) {
-			fb[y * (mb_info->framebuffer_pitch / 4) + x] = 0x000000FF;
+			fb[y * (mb_info->framebuffer_pitch / 4) + x] = 0x000000ff;
 		}
 	}
 	*/
@@ -115,16 +120,38 @@ void kernel_main(multiboot_info_t *mb_info) {
 	/*
 	for (uint32_t y = 0; y < 8; y++) {
 		for(uint32_t x = 0; x < 8; x++) {
-			draw_pixel(mb_info, x, y, 0x00FF0000);
+			draw_pixel(mb_info, x, y, 0x00ff0000);
 
 		}
 	}
 	*/
 
-	kprint("ABCABCABCABCABCABCABCABCACBABABCABCBABCABCABBCBABCBABCABABCBCBACABCABBB\n", mb_info);
-	print_char('A', mb_info);
+	kprint("abcabcabcabcabcabcabcabcacbababcabcbabcabcabbcbabcbabcababcbcbacabcabbb\n", mb_info);
+	print_char('a', mb_info);
 
 	init_shell(mb_info);
+
+	int *adalah = (int *)malloc(sizeof(int) * 4);
+	adalah[0] = 1;
+	adalah[1] = 2;
+	adalah[2] = 3;
+	adalah[3] = 4;
+	kprint_hex((uintptr_t)adalah, mb_info);
+	print_char('\n', mb_info);
+	char *buffer = (char *)malloc(sizeof(char) * 4);
+	to_string(adalah[0], buffer);
+	kprint_hex((uintptr_t)buffer, mb_info);
+	print_char('\n', mb_info);
+	kprint(buffer, mb_info);
+	print_char('\n', mb_info);
+	kprint_hex((uintptr_t)&adalah[1], mb_info);
+	print_char('\n', mb_info);
+
+	//uint32_t *test = (uint32_t *)0x00100000;
+	//*test = 0xDEADBEEF;
+	//char* test_buffer = (char *)malloc(256 * sizeof(char));
+	//to_string((int)test, test_buffer);
+	//kprint(test_buffer, mb_info);
 	
 	for (;;) {
 		shell_run(mb_info);
