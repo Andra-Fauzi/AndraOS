@@ -1,12 +1,12 @@
-TARGET := kernel.bin
+TARGET := kernel.elf
 ISO := kernel.iso
 CC := i686-elf-gcc
 AS := i686-elf-as
 LD := i686-elf-ld
 
-CFLAGS := -std=gnu99 -ffreestanding -O2 -Wall -Wextra -m32 -I./boot -I./kernel -I./drivers -I./lib
+CFLAGS := -g -std=gnu99 -ffreestanding -O0 -Wall -Wextra -m32 -I./boot -I./kernel -I./drivers -I./lib
 ASFLAGS :=
-LDFLAGS := -T boot/linker.ld -O2 -nostdlib
+LDFLAGS := -T boot/linker.ld -O0 -nostdlib -m elf_i386
 
 C_SOURCES := $(shell find boot kernel drivers lib -name '*.c')
 ASM_SOURCES := $(shell find boot kernel drivers lib -name '*.asm')
@@ -50,6 +50,8 @@ iso: $(TARGET)
 run: iso $(ISO) 
 	qemu-system-x86_64 -bios /usr/share/OVMF/OVMF_CODE.fd -cdrom $(ISO) -m 1024M -serial stdio -hda disk.img
 
+debug : iso $(ISO) 
+	qemu-system-i386 -cdrom $(ISO) -serial stdio -no-reboot -no-shutdown -d cpu_reset -D qemu.log -s -S
 
 clean:
 	@echo "[CLEAN]"
