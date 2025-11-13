@@ -83,27 +83,60 @@ multiboot_info_t *multiboot_info;
 extern uint8_t _end;
 
 void kernel_main(multiboot_info_t *mb_info) {
-	if(mb_info == NULL) {
+	/*map_page((uint32_t)0xC1000000, (uint32_t)mb_info, 3);
+	for(int i = 0; i < 1024; i++) {
+		map_page((uint32_t)(0xC2000000 + (i * 0x1000)), (uint32_t)(mb_info->framebuffer_addr + (i * 0x1000)), 3);
+	}
+	multiboot_info = (multiboot_info_t *)0xC1000000;
+	multiboot_info->framebuffer_addr = 0xC2000000;
+	*/
+	
+	// multiboot_info_t *mb_new = phys_to_virt((uint32_t)mb_info);
+	// lili = (uint32_t)mb_new->framebuffer_addr;
+	// multiboot_info->framebuffer_addr = lili;
+
+	uint32_t mb_info_phys = (uint32_t)mb_info;
+	uint32_t mb_info_virt = 0xC1000000; // virtual address to map multiboot info
+
+	map_page(mb_info_virt, mb_info_phys, PTE_KERNEL_RW | PTE_PRESENT);
+	multiboot_info = (multiboot_info_t *)mb_info_virt;
+
+	uint32_t fb_phys = (uint32_t)multiboot_info->framebuffer_addr;
+	uint32_t fb_virt = 0xC2000000; // virtual address to
+
+	uint32_t fb_size = multiboot_info->framebuffer_width * multiboot_info->framebuffer_height * (multiboot_info->framebuffer_bpp / 8);
+	uint32_t fb_pages = (fb_size + 0xFFF) / 0x1000; // round up to nearest page
+
+	for (uint32_t i = 0; i < fb_pages; i++) {
+		map_page(fb_virt + (i * 0x1000), fb_phys + (i * 0x1000), PTE_KERNEL_RW | PTE_PRESENT);
+	}
+
+	// map_page(fb_virt, fb_phys, PTE_KERNEL_RW | PTE_PRESENT);
+	multiboot_info->framebuffer_addr = fb_virt;
+
+	kprint("halo", multiboot_info);
+	/*if(mb_info == NULL) {
 		for (;;) asm("hlt");
 	}
 	if(mb_info->framebuffer_addr == 0) {
 		for (;;) asm("hlt");
 	}
-	multiboot_info = mb_info;
+	*/
+	//multiboot_info = mb_info;
 	gdt_install();
 	idt_install();
 	isr_install();
 	irq_install();
-    heap_init();
-	init_paging();
+    	//heap_init();
+	//init_paging();
 
-	// asm volatile("sti");
+	asm volatile("sti");
 
-	//extern void init_keyboard();
-	//extern void init_timer(uint32_t frequency);
+	extern void init_keyboard();
+	extern void init_timer(uint32_t frequency);
 
-	//init_keyboard();
-	//init_timer(100);
+	init_keyboard();
+	init_timer(100);
 
 
 
@@ -135,25 +168,28 @@ void kernel_main(multiboot_info_t *mb_info) {
 	 * address first (mb_info is still valid here) and map it to a
 	 * virtual region starting at 0x20000000.
 	 */
+	/*
 	uintptr_t mb_phys = (uintptr_t)mb_info;
 	uintptr_t fb_phys = mb_info->framebuffer_addr;
 
 	map_page(0x10000000, (uint32_t)mb_phys, 3);
 
-	/* set global multiboot_info to the new virtual address */
-	multiboot_info = (multiboot_info_t *)0x10000000;
+	 set global multiboot_info to the new virtual address */
+	//multiboot_info = (multiboot_info_t *)0x10000000;
 
 	/* map framebuffer frames into virtual region 0x20000000 */
+	/*
 	for (int i = 0; i < 4096; i++) {
 		map_page((i * 0x1000) + 0x20000000, (uint32_t)(fb_phys + (i * 0x1000)), 3);
 	}
+	*/
 
 	// /* update the multiboot_info structure so its framebuffer_addr points
 	//  * to the virtual mapping we just created. After this, drawing routines
 	//  * using multiboot_info->framebuffer_addr will access the framebuffer
 	//  * via the virtual address 0x20000000.
 	//  
-	multiboot_info->framebuffer_addr = (uintptr_t)0x20000000;
+	//multiboot_info->framebuffer_addr = (uintptr_t)0x20000000;
 
 	// // char *sigma = "andra";
 	// // kprint(sigma, multiboot_info);
@@ -168,7 +204,7 @@ void kernel_main(multiboot_info_t *mb_info) {
 
 	//init_shell(mb_info);
 	//
-	kprint_hex((uintptr_t)multiboot_info->framebuffer_addr, multiboot_info);
+	/*kprint_hex((uintptr_t)multiboot_info->framebuffer_addr, multiboot_info);
 
 
 	#define VIRTUALADDRESS 0xDEAD0000
@@ -199,6 +235,7 @@ void kernel_main(multiboot_info_t *mb_info) {
 	
 	kprint(a, multiboot_info);
 	kprint_hex((uintptr_t)a, multiboot_info);
+	*/
 	
 	// uint32_t pa;
 	
@@ -207,7 +244,7 @@ void kernel_main(multiboot_info_t *mb_info) {
 	// pa = page_table[pt_index] & 0xFFFFF000;
 	
 	
-	print_char('\n', multiboot_info);
+	//print_char('\n', multiboot_info);
 
 	/*
 	 * SAFE TEST (identity mapping while paging ON):
@@ -216,10 +253,10 @@ void kernel_main(multiboot_info_t *mb_info) {
 	 * verify you can access the "physical" address without
 	 * disabling paging.
 	 */
-	uintptr_t test_phys = 0x00500000; /* choose the physical address you want to test */
+	//uintptr_t test_phys = 0x00500000; /* choose the physical address you want to test */
 
 	/* map a single page identity (phys -> same virt) */
-	map_page((uint32_t)test_phys, (uint32_t)test_phys, 3);
+	//map_page((uint32_t)test_phys, (uint32_t)test_phys, 3);
 
 	/* Access via the physical numeric address (now also a valid virtual address)
 	 * and write a small string, then print it using the normal kprint that
@@ -231,12 +268,12 @@ void kernel_main(multiboot_info_t *mb_info) {
 	// p[2] = '\0';
 
 	/* Print the string we just wrote at the physical address */
-	kprint((char *)test_phys, multiboot_info);
-	print_char('\n', multiboot_info);
+	//kprint((char *)test_phys, multiboot_info);
+	//print_char('\n', multiboot_info);
 
 	/* Also print the physical address for verification */
-	kprint_hex((uintptr_t)test_phys, multiboot_info);
-	print_char('\n', multiboot_info);
+	//kprint_hex((uintptr_t)test_phys, multiboot_info);
+	//print_char('\n', multiboot_info);
 
 	/* run the test function that the linker placed into .func_mem via the
 	 * section attribute. Use run_in_function_space so the code runs inside
@@ -265,9 +302,10 @@ void kernel_main(multiboot_info_t *mb_info) {
 	//char* test_buffer = (char *)malloc(256 * sizeof(char));
 	//to_string((int)test, test_buffer);
 	//kprint(test_buffer, mb_info);
-	
+	init_shell(multiboot_info);
 	for (;;) {
-		//shell_run(mb_info);
+		shell_run(multiboot_info);
+		// asm volatile("hlt");
 	}
 
 }

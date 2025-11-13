@@ -7,6 +7,7 @@ extern uint8_t _end;
 #define ALIGNMENT 4
 #define PAGE_SIZE 4096
 
+
 uint8_t *heap_start;
 uint8_t *heap_end;
 block_t *heap_head;
@@ -109,22 +110,72 @@ void free(void *ptr) {
     }
 }
 
-uint32_t alloc_page(void) {
-    static uint32_t page_ptr = 0;
+extern uint8_t _kernel_end;
 
-    if (page_ptr == 0) {
+uint32_t pd_index(uint32_t va) {
+	return (va >> 22) & 0x3FF;
+}
+
+uint32_t pt_index(uint32_t va) {
+	return (va >> 12) & 0x3FF;
+}
+
+/* Helper macros */
+uint32_t virt_to_phys(void *v) {
+    return (uint32_t)v - KERNEL_BASE;
+}
+void *phys_to_virt(uint32_t p) {
+    return (void *)(p + KERNEL_BASE);
+}
+
+extern uint32_t boot_page_directory;
+extern uint32_t boot_page_table1;
+
+uint32_t alloc_page(void) {
+    static uint32_t phys_page_ptr = 0;
+    uint32_t phys_kernel_end = (uint32_t)&_kernel_end - KERNEL_BASE;
+    uint32_t heap_phys_end = phys_kernel_end + HEAP_SIZE;
+
+    if (phys_page_ptr == 0) {
         /* Initialize to heap_start aligned up to 4KB */
-        page_ptr = ((uint32_t)heap_start + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+        phys_page_ptr = (phys_kernel_end + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
     }
 
-    if ((uint32_t)page_ptr + PAGE_SIZE > (uint32_t)heap_end) {
+    if (phys_page_ptr + PAGE_SIZE > heap_phys_end) {
         return 0; /* Out of memory */
     }
 
-    uint32_t ret = page_ptr;
-    page_ptr += PAGE_SIZE;
+    uint32_t phys_alloc = phys_page_ptr;
+    phys_page_ptr += PAGE_SIZE;
+
+    uint32_t va = phys_alloc + KERNEL_BASE;
+    /* Map the page in the boot page directory */
+
+    uint32_t pd_idx = pd_index(va);
+    uint32_t pt_idx = pt_index(va);
+
+    uint32_t *pd = (uint32_t *)&boot_page_directory;
+    // uint32_t *pt;
+
+    if(!(pd[pd_idx] & 0x1)) {
+        if(phys_page_ptr + PAGE_SIZE > heap_phys_end) {
+            phys_page_ptr -= PAGE_SIZE;
+            return 0; /* Out of memory */
+        }
+        uint32_t pt_phys = phys_page_ptr;
+        phys_page_ptr += PAGE_SIZE;
+
+        memset(phys_to_virt(pt_phys), 0, PAGE_SIZE);
+        pd[pd_idx] = (pt_phys & 0xFFFFF000) | 0x003;
+    }
+
+    uint32_t pt_phys_entry = pd[pd_idx] & 0xFFFFF000;
+    uint32_t *pt = (uint32_t *)(pt_phys_entry + KERNEL_BASE);
+
+    
+    pt[pt_idx] = (phys_alloc & 0xFFFFF000) | 0x003;
 
     /* zero the page for safety */
-    memset((void *)ret, 0, PAGE_SIZE);
-    return ret;
+    memset((void *)va, 0, PAGE_SIZE);
+    return va;
 }

@@ -39,7 +39,7 @@
 #define PTE_FUNC_STACK   (PTE_PRESENT | PTE_WRITE | PTE_CACHE_WB)       // Function stack   
 
 void init_paging();
-void map_page(uint32_t virtual_address, uint32_t physical_address, uint32_t flags);
+uint32_t map_page(uint32_t virtual_address, uint32_t physical_address, uint32_t flags);
 uint32_t *get_page_table(uint32_t virtual_address);
 uint32_t get_physical_address(uint32_t virtual_address);
 void disable_paging();

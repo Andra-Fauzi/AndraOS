@@ -51,7 +51,10 @@ run: iso $(ISO)
 	qemu-system-x86_64 -bios /usr/share/OVMF/OVMF_CODE.fd -cdrom $(ISO) -m 1024M -serial stdio -hda disk.img
 
 debug : iso $(ISO) 
-	qemu-system-i386 -cdrom $(ISO) -serial stdio -no-reboot -no-shutdown -d cpu_reset -D qemu.log -s -S
+	qemu-system-i386 -cdrom $(ISO) -monitor stdio -no-reboot -no-shutdown -d cpu_reset -D qemu.log -s -S
+
+gdb:
+	gdb-multiarch $(TARGET)
 
 clean:
 	@echo "[CLEAN]"
