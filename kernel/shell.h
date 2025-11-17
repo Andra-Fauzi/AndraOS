@@ -10,8 +10,8 @@
 #include "kernel_state.h"
 #include "multiboot_header.h"
 
-extern int64_t terminal_x;
-extern int64_t terminal_y;
+extern int32_t terminal_x;
+extern int32_t terminal_y;
 
 void init_shell(multiboot_info_t *mb_info);
 

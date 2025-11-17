@@ -1,11 +1,13 @@
 #include "terminal.h"
 
 
-//uint64_t VGA_WIDTH = 0;
-//uint64_t VGA_HEIGHT = 0;
+//uint32_t VGA_WIDTH = 0;
+//uint32_t VGA_HEIGHT = 0;
 
-int64_t terminal_x = 0;
-int64_t terminal_y = 0;
+extern uint32_t framebuffer_address;
+
+int32_t terminal_x = 0;
+int32_t terminal_y = 0;
 
 char font8x8_basic[128][8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0000 (nul)
@@ -143,7 +145,7 @@ void draw_pixel(multiboot_info_t *mb_info, int x, int y, uint32_t color) {
     uint32_t pitch = mb_info->framebuffer_pitch;
     uint32_t width = mb_info->framebuffer_width;
     uint32_t height = mb_info->framebuffer_height;
-    uintptr_t fb_addr = (uintptr_t) mb_info->framebuffer_addr;
+    uintptr_t fb_addr = (uintptr_t) framebuffer_address;
     uint32_t *fb = (uint32_t *) fb_addr;
     uint32_t pitch_pixels = pitch / 4;
     fb[y * pitch_pixels + x] = color;
@@ -170,9 +172,9 @@ void clear_line(int line) {
 */
 
 void clear_screen(multiboot_info_t *mb_info) {
-	uint32_t *fb = (uint32_t *)mb_info->framebuffer_addr;
-	uint64_t VGA_WIDTH = mb_info->framebuffer_width;
-	uint64_t VGA_HEIGHT = mb_info->framebuffer_height;
+	uint32_t *fb = (uint32_t *)framebuffer_address;
+	uint32_t VGA_WIDTH = mb_info->framebuffer_width;
+	uint32_t VGA_HEIGHT = mb_info->framebuffer_height;
 	uint32_t pitch = mb_info->framebuffer_pitch / 4;
 	for (int y = 0; y < VGA_HEIGHT; y++) {
 		for (int x = 0; x < VGA_WIDTH; x++) {
@@ -192,19 +194,19 @@ void terminal_init(multiboot_info_t *mb_info) {
 */
 
 #define CHAR_SIZE 8
-#define SCALE 2
+#define SCALE 1
 #define CHAR_WIDTH (CHAR_SIZE * SCALE)
 #define CHAR_HEIGHT (CHAR_SIZE * SCALE)
 
 void scroll_framebuffer(multiboot_info_t *mb_info) {
-    uint32_t *fb = (uint32_t *)mb_info->framebuffer_addr;
+    uint32_t *fb = (uint32_t *)framebuffer_address;
     int fb_width = mb_info->framebuffer_width;
     int fb_height = mb_info->framebuffer_height;
 
     int scroll_pixels = CHAR_HEIGHT;
 
     // copy dari bawah ke atas, mulai dari baris paling bawah yang masih bisa digeser
-    for (int y = 0; y < fb_height; y++) {
+    for (int y = 0; y < fb_height - scroll_pixels; y++) {
         for (int x = 0; x < fb_width; x++) {
             fb[y * fb_width + x] = fb[(y + CHAR_HEIGHT) * fb_width + x];
         }
@@ -218,13 +220,16 @@ void scroll_framebuffer(multiboot_info_t *mb_info) {
     }
 
     // geser terminal_y
+    terminal_y -= scroll_pixels;
+    if (terminal_y < 0)
+        terminal_y = 0;
 }
 
 bool shell_mode = false;
 
 void print_char(char c, multiboot_info_t *mb_info) {
-	uint64_t VGA_WIDTH = mb_info->framebuffer_width;
-	uint64_t VGA_HEIGHT = mb_info->framebuffer_height;
+	uint32_t VGA_WIDTH = mb_info->framebuffer_width;
+	uint32_t VGA_HEIGHT = mb_info->framebuffer_height;
     if (c == '\n') {
         if(shell_mode == true) {
     	    terminal_x = 1;
@@ -262,7 +267,9 @@ void print_char(char c, multiboot_info_t *mb_info) {
     	terminal_x = 0;
     	terminal_y += CHAR_HEIGHT;
     }
-
+    if (terminal_y + CHAR_HEIGHT > VGA_HEIGHT) {
+		scroll_framebuffer(mb_info);
+    }
 	if(c >= 0 && c < 128 && c != '\n' && c != '\b') {
 		// gambar karakter
     		int bitmap_index = (int)c;
@@ -287,10 +294,7 @@ void print_char(char c, multiboot_info_t *mb_info) {
     	
 
     	
-    if (terminal_y + CHAR_HEIGHT > VGA_HEIGHT) {
-		scroll_framebuffer(mb_info);
-    		terminal_y -= CHAR_HEIGHT;
-    }
+    
 }
 
 

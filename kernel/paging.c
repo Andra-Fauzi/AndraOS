@@ -15,8 +15,9 @@ extern uint32_t boot_page_table1;
 uint32_t page_directory[1024] __attribute__((aligned(4096)));
 uint32_t first_page_table[1024] __attribute__((aligned(4096)));
 
-void reserve_physical_frame(uint32_t physical_address) {
-}
+// dont use it 
+// void reserve_physical_frame(uint32_t physical_address) {
+// }
 
 void invalidate_tlb(uint32_t virtual_address) {
     asm volatile("invlpg (%0)" :: "r" (virtual_address) : "memory");
@@ -108,35 +109,35 @@ uint32_t map_page(uint32_t virtual_address, uint32_t physical_address, uint32_t 
     return virtual_address;
 }
 
+// # BROKEN, DONT USE IT
+// void init_paging() {
+//     // Bersihkan semua entry
+//     memset(page_directory, 0, sizeof(page_directory));
+//     memset(first_page_table, 0, sizeof(first_page_table));
 
-void init_paging() {
-    // Bersihkan semua entry
-    memset(page_directory, 0, sizeof(page_directory));
-    memset(first_page_table, 0, sizeof(first_page_table));
-
-    // Identity mapping untuk 0x00000000 � 4MB
+//     // Identity mapping untuk 0x00000000 � 4MB
     
-    for (uint32_t i = 0; i < 1024; i++) {
-        first_page_table[i] = (i * PAGE_SIZE) | 3; // Present + RW
-    }
+//     for (uint32_t i = 0; i < 1024; i++) {
+//         first_page_table[i] = (i * PAGE_SIZE) | 3; // Present + RW
+//     }
 
-    // Pasang first page table ke page directory
-    page_directory[0] = ((uint32_t)first_page_table) | 3; // Present + RW
+//     // Pasang first page table ke page directory
+//     page_directory[0] = ((uint32_t)first_page_table) | 3; // Present + RW
 
-    // Load CR3
-    asm volatile("mov %0, %%cr3" :: "r"(page_directory));
+//     // Load CR3
+//     asm volatile("mov %0, %%cr3" :: "r"(page_directory));
 
-    // Aktifkan paging dengan set PG bit di CR0
-    uint32_t cr0;
-    asm volatile("mov %%cr0, %0" : "=r"(cr0));
-    cr0 |= 0x80000000; // set PG bit
-    asm volatile("mov %0, %%cr0" :: "r"(cr0));
-}
+//     // Aktifkan paging dengan set PG bit di CR0
+//     uint32_t cr0;
+//     asm volatile("mov %%cr0, %0" : "=r"(cr0));
+//     cr0 |= 0x80000000; // set PG bit
+//     asm volatile("mov %0, %%cr0" :: "r"(cr0));
+// }
 
 
-void disable_paging() {
-    uint32_t cr0;
-    asm volatile("mov %%cr0, %0" : "=r"(cr0));
-    cr0 &= ~0x80000000;
-    asm volatile("mov %0, %%cr0" :: "r"(cr0));
-}
+// void disable_paging() {
+//     uint32_t cr0;
+//     asm volatile("mov %%cr0, %0" : "=r"(cr0));
+//     cr0 &= ~0x80000000;
+//     asm volatile("mov %0, %%cr0" :: "r"(cr0));
+// }

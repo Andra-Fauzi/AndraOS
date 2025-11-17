@@ -2,11 +2,15 @@
 #include "irq.h"
 #include "port_io.h"
 #include "terminal.h"
+#include "scheduler.h"
 
 volatile uint32_t timer_ticks = 0;
 
+extern multiboot_info_t *multiboot_info;
+
 void timer_callback(struct regs *r) {
 	timer_ticks++;
+	//kprint(".", multiboot_info);
 }
 
 void init_timer(uint32_t frequency) {
