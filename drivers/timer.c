@@ -7,10 +7,12 @@
 volatile uint32_t timer_ticks = 0;
 
 extern multiboot_info_t *multiboot_info;
+extern void switch_context(void);
 
 void timer_callback(struct regs *r) {
 	timer_ticks++;
-	//kprint(".", multiboot_info);
+	kprint(".", multiboot_info);
+	//
 }
 
 void init_timer(uint32_t frequency) {

@@ -134,11 +134,12 @@ void kernel_main(multiboot_info_t *mb_info) {
 	gdt_install();
 	idt_install();
 	isr_install();
+	asm volatile("sti");
 	irq_install();
     	//heap_init();
 	//init_paging();
+	initTasking();
 
-	asm volatile("sti");
 
 	extern void init_keyboard();
 	extern void init_timer(uint32_t frequency);
@@ -146,18 +147,13 @@ void kernel_main(multiboot_info_t *mb_info) {
 	init_keyboard();
 	init_timer(10);
 
-
-
-	initTasking();
-
-	
 	//init_shell(multiboot_info);
 	for (;;) {
 		//shell_run(multiboot_info);
 		// asm volatile("hlt");
 		kprint("main task running\n", multiboot_info);
-		sleep_ms(1000);
-		yield();
+		//sleep_ms(1000);
+		//yield();
 	}
 
 }

@@ -6,6 +6,7 @@
 #include "terminal.h"
 #include "idt.h"
 #include "isr.h"
+#include "util.h"
 
 typedef void (*irq_callback_t)(struct regs*);
 void register_irq_handler(int irq, irq_callback_t handler);

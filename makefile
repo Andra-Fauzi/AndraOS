@@ -5,7 +5,7 @@ AS := i686-elf-as
 LD := i686-elf-ld
 
 CFLAGS := -g -std=gnu99 -ffreestanding -O0 -Wall -Wextra -m32 -I./boot -I./kernel -I./drivers -I./lib
-ASFLAGS :=
+ASFLAGS := -g
 LDFLAGS := -T boot/linker.ld -O0 -nostdlib -m elf_i386
 
 C_SOURCES := $(shell find boot kernel drivers lib -name '*.c')

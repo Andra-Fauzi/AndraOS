@@ -22,13 +22,27 @@ void unregister_irq_handler(int irq) {
 	irq_routines[irq] = 0;
 }
 
+extern void switch_context(struct regs *r);
+extern multiboot_info_t *multiboot_info;
+
 void irq_handler(struct regs *r) {
 	uint32_t int_no = r->int_no;
 	uint8_t irq = int_no - IRQ_BASE;
 
+	if(irq == 0) {
+		kprint("timer call", multiboot_info);
+		send_eoi(0);
+		switch_context(r);
+	}
+
 	if(irq < 16 && irq_routines[irq]) {
 		irq_routines[irq](r);
 	}
+
+	char buffer[255];
+
+	to_string(int_no, buffer);
+	kprint(buffer, multiboot_info);
 
 	send_eoi(irq);
 }

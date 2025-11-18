@@ -11,6 +11,7 @@ extern void initTasking();
 
 typedef struct {
     uint32_t eax, ebx, ecx, edx, esi, edi, esp, ebp, eip, eflags, cr3;
+//	     0    4    8    12   16   20   24   28   32   36      40
 } Registers;
 
 typedef struct Task {

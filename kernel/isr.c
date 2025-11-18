@@ -38,5 +38,5 @@ void isr_install() {
 extern multiboot_info_t *multiboot_info;
 
 void isr_handler(struct regs *r) {
-	kprint("interrupt terjadi", multiboot_info);
+	//kprint("interrupt terjadi", multiboot_info);
 }

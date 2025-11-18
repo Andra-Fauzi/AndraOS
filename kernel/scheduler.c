@@ -1,25 +1,24 @@
 #include "scheduler.h"
 
-static Task *runningTask;
-static Task mainTask;
-static Task secondTask;
-static Task thirdTask;
+volatile Task *runningTask;
+volatile Task mainTask;
+volatile Task secondTask;
+volatile Task thirdTask;
 
-static void secondMain() {
-    kprint("Hello multitasking world!", multiboot_info); // Not implemented here...
+void secondMain() {
+	kprint("Hello multitasking world!", multiboot_info); // Not implemented here...
 	while(1) {
 		kprint("task 2 running!\n", multiboot_info);
-		sleep_ms(1000);
-    		yield();
+		asm volatile("hlt");
 	}
 }
 
-static void thirdMain() {
+void thirdMain() {
     kprint("Hello multitasking world!", multiboot_info); // Not implemented here...
+    
 	while(1) {
 		kprint("task 3 running!\n", multiboot_info);
-		sleep_ms(1000);
-    		yield();
+		asm volatile("hlt");
 	}
 }
 
