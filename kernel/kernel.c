@@ -15,6 +15,7 @@
 #include "paging.h"
 #include "isolation.h"
 #include "scheduler.h"
+#include "fat.h"
 
 #if defined(__linux__)
 #error "You are not using cross compiler you will run to some trouble"
@@ -147,11 +148,80 @@ void kernel_main(multiboot_info_t *mb_info) {
 	init_keyboard();
 	init_timer(10);
 
-	//init_shell(multiboot_info);
+	init_shell(multiboot_info);
+	
+	// to_string(boot_record.table_size_16, buffer);
+	// kprint(buffer, multiboot_info);
+
+	// uint8_t FAT_TABLE[boot_record.number_of_sector * boot_record.bytes_per_sector];
+	// uint16_t fat_offset = boot_record.reserved_sector_count * 2;
+	// uint16_t fat_sector = boot_record.reserved_sector_count + (fat_offset / boot_record.bytes_per_sector);
+	// uint16_t ent_offset = fat_offset % boot_record.total_sector_16;
+	// for (int i = 0; i < boot_record.number_of_sector; i++) {
+	// 	ata_read_sector(boot_record.reserved_sector_count + i, FAT_TABLE + (i * boot_record.number_of_sector));
+	// }	
+
+	// uint16_t table_value = *(uint16_t *)&FAT_TABLE[ent_offset];
+
+	// kprint((char*)table_value, multiboot_info);
+
+	init_fat16();
+	char buffer[512];
+
+	// uint16_t some_cluster = readFATTable(5);
+
+	// to_string(some_cluster, buffer);
+
+	// if(some_cluster >= 0xFFF8) {
+	// 	kprint("error cik", multiboot_info);
+	// }
+
+	// kprint("some cluster: ", multiboot_info);
+	// kprint(buffer, multiboot_info);
+	// print_char('\n', multiboot_info);
+
+	// uint32_t some_sector = cluster_to_LBA(some_cluster);
+
+	// to_string(some_sector, buffer);
+
+	// kprint("some sector: ", multiboot_info);
+	// kprint(buffer, multiboot_info);
+	// print_char('\n', multiboot_info);
+
+	// ata_read_sector(some_sector + 2048, buffer);
+
+	// kprint("result: ", multiboot_info);
+	// kprint(buffer, multiboot_info);
+	// print_char('\n', multiboot_info);
+	kprint("mari kita test", multiboot_info);
+
+	list_root_dir();
+
+	// uint16_t active_cluster = readFATTable(6656);
+
+	// to_string(active_cluster, buffer);
+
+	// kprint("active_cluster: ", multiboot_info);
+	// kprint(buffer, multiboot_info);
+	// print_char('\n', multiboot_info);
+
+	// uint32_t active_sector = cluster_to_LBA(active_cluster);
+
+	// to_string(active_sector, buffer);
+	// kprint("active_sector: ", multiboot_info);
+	// kprint(buffer, multiboot_info);
+	// print_char('\n', multiboot_info);
+
+	// ata_read_sector(active_sector + 2048, buffer);
+
+	// kprint("active_sector data: ", multiboot_info);
+	// kprint(buffer, multiboot_info);
+	// print_char('\n', multiboot_info);
+
 	for (;;) {
-		//shell_run(multiboot_info);
-		// asm volatile("hlt");
-		kprint("main task running\n", multiboot_info);
+		shell_run(multiboot_info);
+		asm volatile("hlt");
+		//kprint("main task running\n", multiboot_info);
 		//sleep_ms(1000);
 		//yield();
 	}

@@ -1,12 +1,14 @@
 #include "util.h"
 
-void memcpy(void *source, void *destination, size_t n) {
-    char *src = (char *)source;
-    char *dest = (char *)destination;
-    for(int i = 0; i < n; i++) {
-        dest[i] = src[i];
+void memcpy(void *dest, const void *src, size_t n) {
+    const unsigned char *s = (const unsigned char *)src;
+    unsigned char *d = (unsigned char *)dest;
+
+    for (size_t i = 0; i < n; i++) {
+        d[i] = s[i];
     }
 }
+
 
 void memset(void *ptr, int value, size_t n) {
     char *src = (char *)ptr;
@@ -98,4 +100,8 @@ void to_string(int value, char *buffer) {
         buffer[j] = buffer[i - 1 - j];
         buffer[i - 1 - j] = tmp;
     }
+}
+
+uint16_t read_u16(uint8_t low, uint8_t high) {
+	return ((uint16_t)high << 8) | low;
 }

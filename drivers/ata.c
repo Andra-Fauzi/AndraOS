@@ -39,7 +39,7 @@ int ata_read_sector(uint32_t lba, uint8_t* buffer) {
 	for(int i = 0; i < 256; i++) {
 		uint16_t data = inw(0x1F0);
 		buffer[i*2] = data & 0xFF;
-		buffer[i*2+1] = (data >> 8) & 0xFF;
+		buffer[i*2 + 1] = (data >> 8) & 0xFF;
 	}
 	return 0;
 }

@@ -9,6 +9,7 @@
 #include "ata.h"
 #include "kernel_state.h"
 #include "multiboot_header.h"
+#include "fat.h"
 
 extern int32_t terminal_x;
 extern int32_t terminal_y;

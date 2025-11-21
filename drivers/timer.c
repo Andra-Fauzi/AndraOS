@@ -11,7 +11,7 @@ extern void switch_context(void);
 
 void timer_callback(struct regs *r) {
 	timer_ticks++;
-	kprint(".", multiboot_info);
+	//kprint(".", multiboot_info);
 	//
 }
 

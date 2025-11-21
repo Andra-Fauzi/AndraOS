@@ -57,12 +57,85 @@ void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
 	char *clear = "clear\0";
 	char *read_sector = "readsector\0";
 	char *write_sector = "writesector\0";
+	char *read_fat = "readfat\0";
+	char *read_cluster = "readcluster\0";
+	char *list_root = "lsroot\0";
+	char *listdir = "lsdir\0";
 	if (cmp(help, buffer) == 0) {
 		kprint("clear : buat membersihkan layar\n", mb_info);
-	} else if (cmp(clear, buffer) == 0) {
+	} else if(cmp(listdir, buffer) == 0) {
+		kprint("ketik cluster untuk dilist\n", mb_info);
+		char *input = read_input(mb_info);
+		int i = 0;
+		uint16_t cluster = 0;
+		while(input[i] != '\0') {
+			if(input[i] >= '0' && input[i] <= '9') {
+				cluster = cluster * 10 + (input[i] - '0');
+			} else if(input[i] == '\n') {
+				kprint("cluster sudah dapat\n", mb_info);
+			} else {
+				kprint("itu bukan angka\n", mb_info);
+			}
+			i++;
+		}
+		kprint("melist directory di cluster itu\n", mb_info);
+		list_dir(cluster);
+	} else if(cmp(read_cluster, buffer) == 0) {
+		kprint("ketik cluster untuk dibaca\n", mb_info);
+		char *input = read_input(mb_info);
+		int i = 0;
+		uint16_t cluster = 0;
+		while(input[i] != '\0') {
+			if(input[i] >= '0' && input[i] <= '9') {
+				cluster = cluster * 10 + (input[i] - '0');
+			} else if(input[i] == '\n') {
+				kprint("cluster sudah dapat\n", mb_info);
+			} else {
+				kprint("itu bukan angka\n", mb_info);
+			}
+			i++;
+		}
+		kprint("membaca data di cluster itu\n", mb_info);
+		uint32_t lba = cluster_to_LBA(cluster);
+
+		char buffer[512];
+
+		to_string(cluster, buffer);
+		kprint("reading cluster: ", mb_info);
+		kprint(buffer, mb_info);
+		print_char('\n', mb_info);
+		to_string(lba, buffer);
+		kprint("reading lba: ", mb_info);
+		kprint(buffer, mb_info);
+		print_char('\n', mb_info);
+		ata_read_sector(lba, buffer);
+		kprint("reading data: ", mb_info);
+		kprint(buffer, mb_info);
+		print_char('\n', mb_info);
+
+	} else if(cmp(read_fat, buffer) == 0) {
+		kprint("ketik cluster untuk dibaca dari FAT table\n", mb_info);
+		char *input = read_input(mb_info);
+		int i = 0;
+		int cluster = 0;
+		while(input[i] != '\0') {
+			if(input[i] >= '0' && input[i] <= '9') {
+				cluster = cluster * 10 + (input[i] - '0');
+			} else if(input[i] == '\n') {
+				kprint("cluster sudah dapat\n", mb_info);
+			} else {
+				kprint("itu bukan angka\n", mb_info);
+			}
+			i++;
+		}
+		readFATuntilEOC(cluster);
+	} else if(cmp(list_root, buffer) == 0) {
+		list_root_dir();
+	} 
+	else if (cmp(clear, buffer) == 0) {
 		clear_screen(mb_info);
 	} else if (cmp(read_sector, buffer) == 0) {
-		kprint("sektor dari 1-", mb_info);
+		kprint("sektor dari 0-", mb_info);
 		char* total = char_total_sectors();
 		kprint(total, mb_info);
 		kprint("\n", mb_info);
@@ -83,8 +156,8 @@ void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
 		
 		kprint("membaca sector\n", mb_info);
 		char buffer_read[512];
-		if(sector-1 >= 0 && sector-1 < ata_get_total_sectors()) {
-			int status = ata_read_sector(sector-1, buffer_read);
+		if(sector >= 0 && sector < ata_get_total_sectors()) {
+			int status = ata_read_sector(sector, buffer_read);
 			if(status == 0) {
 				kprint("sukses baca sector\n", mb_info);
 				kprint(buffer_read, mb_info);
@@ -92,7 +165,7 @@ void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
 				kprint("gagal baca sector\n", mb_info);
 			}
 		} else {
-			kprint("batas sectornya 1-", mb_info);
+			kprint("batas sectornya 0-", mb_info);
 			kprint(char_total_sectors(), mb_info);
 			kprint("!\n", mb_info);
 		}
