@@ -108,8 +108,8 @@ void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
 		kprint("reading lba: ", mb_info);
 		kprint(buffer, mb_info);
 		print_char('\n', mb_info);
-		ata_read_sector(lba, buffer);
-		kprint("reading data: ", mb_info);
+		ata_read_sector(2048 + lba, buffer);
+		kprint("reading data: \n", mb_info);
 		kprint(buffer, mb_info);
 		print_char('\n', mb_info);
 
