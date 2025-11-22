@@ -108,6 +108,32 @@ uint16_t readFATTable(uint16_t active_cluster) {
     return table_value;
 }
 
+void writeFATTable(uint16_t active_cluster, uint16_t value) {
+    if(active_cluster < 2 || active_cluster >= total_clusters) {
+        return;
+    }
+    // FAT16: 2 bytes per entry
+    uint32_t fat_offset = active_cluster * 2;
+
+    // sector di FAT yang mengandung entri
+    uint32_t fat_sector = first_fat_sector + (fat_offset / boot_record.bytes_per_sector);
+
+    // offset dalam sektor
+    uint32_t ent_offset = fat_offset % boot_record.bytes_per_sector;
+
+    // baca sektor FAT
+    uint8_t sector_data[boot_record.bytes_per_sector]; // asumsikan bytes_per_sector = 512
+    ata_read_sector(2048 + fat_sector, sector_data);
+
+    uint8_t value_lo = (uint8_t)(value & 0xFF);
+    uint8_t value_hi = (uint8_t)((value >> 8) & 0xFF); 
+
+    memcpy(&sector_data[ent_offset], &value_lo, sizeof(uint8_t));
+    memcpy(&sector_data[ent_offset+1], &value_hi, sizeof(uint8_t));
+
+    ata_write_sector(2048 + fat_sector, sector_data);
+}
+
 void readFATuntilEOC(uint16_t active_cluster) {
 	uint16_t table_value = active_cluster;
 	char buffer[512];
@@ -254,8 +280,6 @@ void list_root_dir() {
     }
 }
 
-
-
 uint32_t cluster_to_LBA(uint16_t cluster) {
 	uint32_t result = first_data_sectors + ((cluster - 2) * boot_record.sector_per_cluster);
     return result;
@@ -263,8 +287,38 @@ uint32_t cluster_to_LBA(uint16_t cluster) {
 
 
 
-void create_entry(fat_dir_entry_t entry) {
-
+void create_entry(fat_dir_entry_t entry, uint16_t cluster) {
+    uint16_t cluster_real = cluster;
+    uint16_t table_value = 1;
+    while(readFATTable(cluster_real) != 0x0000) {
+        cluster_real++;
+    }
+    writeFATTable(cluster_real, 0xFFFF);
+    char buffer[sizeof(fat_dir_entry_t)];
+    char buffer1[512];
+    to_string(cluster_real, buffer1);
+    kprint("cluster untuk entri ini ada di :", multiboot_info);
+    kprint(buffer1, multiboot_info);
+    print_char('\n', multiboot_info);
+    entry.first_cluster_lo = cluster_real;
+    memcpy(buffer, &entry, sizeof(fat_dir_entry_t));
+    uint32_t lba = cluster_to_LBA(cluster);
+    uint32_t place_sector = 0;
+    for(uint32_t i = 0; i < boot_record.sector_per_cluster; i++) {
+        uint8_t sector_data[boot_record.bytes_per_sector];
+        ata_read_sector(2048 + lba + i, sector_data);
+        uint32_t entries_per_sector = boot_record.bytes_per_sector / sizeof(fat_dir_entry_t);
+        fat_dir_entry_t *entries = (fat_dir_entry_t *)sector_data;
+        for(uint32_t j = 0; j < entries_per_sector; j++) {
+            fat_dir_entry_t *e = &entries[j];
+            if(e->name[0] == 0x00)
+            {
+                memcpy(&entries[j], &entry, sizeof(fat_dir_entry_t));
+                ata_write_sector(2048 + lba + i, sector_data);
+                return;
+            }
+        }
+    }
 }
 
 void create_entry_in_root_directory(fat_dir_entry_t entry) {

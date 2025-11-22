@@ -61,8 +61,41 @@ void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
 	char *read_cluster = "readcluster\0";
 	char *list_root = "lsroot\0";
 	char *listdir = "lsdir\0";
+	char *createentry = "mkentry\0";
 	if (cmp(help, buffer) == 0) {
 		kprint("clear : buat membersihkan layar\n", mb_info);
+	} else if(cmp(createentry, buffer) == 0) {
+		kprint("ketik cluster untuk dilist\n", mb_info);
+		char *input = read_input(mb_info);
+		int i = 0;
+		uint16_t cluster = 0;
+		while(input[i] != '\0') {
+			if(input[i] >= '0' && input[i] <= '9') {
+				cluster = cluster * 10 + (input[i] - '0');
+			} else if(input[i] == '\n') {
+				kprint("cluster sudah dapat\n", mb_info);
+			} else {
+				kprint("itu bukan angka\n", mb_info);
+			}
+			i++;
+		}
+		fat_dir_entry_t test;
+
+		memset(&test, 0, sizeof(test));
+
+		memset(test.name, ' ', 11);
+
+		test.name[0] = 'T';
+		test.name[1] = 'E';
+		test.name[2] = 'S';
+		test.name[3] = 'T';
+		test.name[8] = 'I';
+		test.name[9] = 'N';
+		test.name[10] = 'I';
+
+		test.attr = 0x20;
+
+		create_entry(test, cluster);
 	} else if(cmp(listdir, buffer) == 0) {
 		kprint("ketik cluster untuk dilist\n", mb_info);
 		char *input = read_input(mb_info);

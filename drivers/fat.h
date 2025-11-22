@@ -50,7 +50,7 @@ typedef struct __attribute__((packed)) fat_dir_entry {
 
 
 fat_BS_t parse_BS(const char *buffer);
-
+void create_entry(fat_dir_entry_t entry, uint16_t cluster);
 void init_fat16();
 
 uint16_t readFATTable(uint16_t active_cluster);
