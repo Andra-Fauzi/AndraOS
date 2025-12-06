@@ -102,6 +102,29 @@ void to_string(int value, char *buffer) {
     }
 }
 
+void substr(char *haystack, char needle, int length, char result[][128]) {
+	int col = 0;
+	int idx = 0;
+	for (int i = 0; i < length; i++) {
+		if(haystack[i] == needle) {
+			result[col][idx] = '\0';
+			idx = 0;
+			col++;
+		} else {
+			result[col][idx] = haystack[i];
+			idx++;
+		}
+	}
+}
+
 uint16_t read_u16(uint8_t low, uint8_t high) {
 	return ((uint16_t)high << 8) | low;
+}
+
+void str_to_upper(char *str, int length) {
+	for (int i = 0; i < length; i++) {
+		if (str[i] >= 'a' && str[i] <= 'z') {
+			str[i] = str[i] - 32;  // Convert to uppercase
+		}
+	}
 }

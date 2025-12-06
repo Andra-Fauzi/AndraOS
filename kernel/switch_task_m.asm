@@ -45,19 +45,37 @@ switch_context:
 	
 	# field-by-field copy
 
+
 	mov runningTask, %eax
 
-	mov 4(%eax), %ebx
+	# Build iret stack frame FIRST before touching esp
+	# iret needs: eip, cs, eflags
+	mov 24(%eax), %esp   # Switch to new task's stack
+	mov 36(%eax), %ebx   # Load eflags
+	push %ebx            # Push eflags for iret
+	push $0x08           # Push code segment
+	mov 32(%eax), %ebx   # Load eip  
+	push %ebx            # Push eip for iret
+	
+	# Now restore all GPRs (except esp which is already set)
+	# We need to be careful - use ebx temporarily, then restore it last
+	mov 4(%eax), %ebx    # Load task's ebx value (temporarily in ebx - will fix)
+	push %ebx            # Save ebx on stack temporarily
+	
+	mov 0(%eax), %ebx    # Load task's eax into ebx (temp)
+	push %ebx            # Save eax on stack temporarily
+	
+	# Restore other registers
 	mov 8(%eax), %ecx
 	mov 12(%eax), %edx
 	mov 16(%eax), %esi
 	mov 20(%eax), %edi
-	mov 24(%eax), %esp
 	mov 28(%eax), %ebp
-
-	push 36(%eax)
-	push $0x08
-	push 32(%eax)
-
+	
+	# Finally restore eax and ebx from stack
+	pop %eax             # Restore eax
+	pop %ebx             # Restore ebx
+	
+	# Stack frame is: [eip] [cs] [eflags] <- esp
 	iret 
 

@@ -50,12 +50,14 @@ iso: $(TARGET)
 run: iso $(ISO) 
 	qemu-system-x86_64 -bios /usr/share/OVMF/OVMF_CODE.fd -cdrom $(ISO) -m 1024M -serial stdio -hda disk.img
 
-debug : iso $(ISO) 
+debug : iso $(ISO)
 	qemu-system-i386 -cdrom $(ISO) -monitor stdio -no-reboot -no-shutdown -d cpu_reset -D qemu.log -s -S
 
 gdb:
 	gdb-multiarch $(TARGET)
-
+run-disk:
+	sudo bash insert_kernel.sh
+	qemu-system-i386 -drive format=raw,file=disk.img
 clean:
 	@echo "[CLEAN]"
 	rm -rf obj $(TARGET) $(ISO)

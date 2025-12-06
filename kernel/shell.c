@@ -1,8 +1,25 @@
 #include "shell.h"
 
+char command_buffer[256];
+int length_command = 0;
+uint16_t active_cluster = 0;
+char current_dir[255];
+command_args_t args[5];
+
+
 void init_shell(multiboot_info_t *mb_info) {
 	clear_screen(mb_info);
+	memset(current_dir, 0, sizeof(current_dir));
+	current_dir[0] = 'r';
+	current_dir[1] = 'o';
+	current_dir[2] = 'o';
+	current_dir[3] = 't';
+	current_dir[4] = '\0';
 	shell_mode = true;
+	memset(args, 0, sizeof(args) * 5);
+	memset(args[0].name, 0, sizeof(char) * 255);
+	memcpy(args[0].name, "cd\0", sizeof(char) * 2);
+	args[0].function = c_cd;
 }
 
 char shell_getchar() {
@@ -52,6 +69,7 @@ char* read_input(multiboot_info_t *mb_info) {
 	return buffer;
 }
 
+/*
 void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
 	char *help = "help\0";
 	char *clear = "clear\0";
@@ -240,14 +258,59 @@ void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
 		kprint("command apa tuh? coba help\n", mb_info);
 	}
 }
+*/
 
 
-
-char command_buffer[256];
-int length_command = 0;
+void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
+	if(length == 0) {
+		return;
+	}
+	char command_args[3][128];
+	substr(buffer, ' ', length, command_args);
+	if(memcmp(command_args[0], "ls", length) == 0) {
+		list_dir(active_cluster);
+	}
+	else if (memcmp(command_args[0], "cd", 2) == 0) {
+		if(command_args[1][0] != '\0') {
+			int hasil = find_cluster(active_cluster, command_args[1], length-3);
+			if(hasil == -1) {
+				kprint("folder tidak di temukan\n", mb_info);
+			}
+			else if(memcmp(command_args[1], "..", 2) == 0) {
+				active_cluster = hasil;
+				int i = 255;
+				while(current_dir[i] != '\\') {
+					current_dir[i] = 0;
+					i--;
+				}
+				current_dir[i] = '\0';
+			}
+			else {
+				active_cluster = hasil;
+				if(memcmp(command_args[1], ".", 1) != 0) {
+					int i = 0;
+					while(current_dir[i] != '\0') {
+						i++;
+					}
+					current_dir[i] = '\\';
+					i++;
+					memcpy(current_dir+i, command_args[1], length-3);
+					current_dir[i + length-3] = '\0';
+				}
+			}
+		}
+	}
+	else if(memcmp(command_args[0], "clear", length) == 0) {
+		clear_screen(mb_info);
+	}
+	else {
+		kprint("command not found?, try help\n", mb_info);
+	}
+}
 
 void shell_run(multiboot_info_t *mb_info) {
-	if(terminal_x < 1 && terminal_y < 1) {
+	if(terminal_x < 1 && terminal_y) {
+		kprint(current_dir, mb_info);
 		print_char('>', mb_info);
 	}
 	char character;
@@ -259,20 +322,20 @@ void shell_run(multiboot_info_t *mb_info) {
 		length_command--;
 		print_char(character, mb_info);
 	} 
-	else if(character) {
-		print_char(character, mb_info);
-		command_buffer[length_command] = character;
-		length_command++;
-	}
-	if(character == '\n') {
-		command_buffer[length_command] = '\0';
+	else if(character == '\n') {
 		print_char(character, mb_info);
 		execute_command(command_buffer, length_command, mb_info);
 		while(length_command > 0) {
 			command_buffer[length_command] = 0;
 			length_command--;
 		}
+		kprint(current_dir, mb_info);
 		print_char('>', mb_info);
+	}
+	else if(character != '\b' && character != '\n') {
+		print_char(character, mb_info);
+		command_buffer[length_command] = character;
+		length_command++;
 	}
 }
 

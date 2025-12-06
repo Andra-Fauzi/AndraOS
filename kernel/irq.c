@@ -29,13 +29,12 @@ void irq_handler(struct regs *r) {
 	uint32_t int_no = r->int_no;
 	uint8_t irq = int_no - IRQ_BASE;
 
-	/*
-	if(irq == 0) {
-		kprint("timer call", multiboot_info);
-		send_eoi(0);
-		switch_context(r);
-	}
-	*/
+	// if(irq == 0) {
+	// 	// kprint("timer call", multiboot_info);
+	// 	send_eoi(0);
+	// 	switch_context(r);
+	// 	return; // Prevent double send_eoi
+	// }
 
 	if(irq < 16 && irq_routines[irq]) {
 		irq_routines[irq](r);

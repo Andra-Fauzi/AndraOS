@@ -287,6 +287,144 @@ uint32_t cluster_to_LBA(uint16_t cluster) {
 
 
 
+int find_cluster(uint16_t cluster, char *name, int length) {
+    // Convert input name to uppercase for FAT16 matching
+    char upper_name[128];
+    memcpy(upper_name, name, length);
+    // upper_name[length] = '\0';
+    str_to_upper(upper_name, length);
+    // kprint(upper_name, multiboot_info);
+
+    if(cluster < 2) {
+        uint32_t entries_per_sector = boot_record.bytes_per_sector / sizeof(fat_dir_entry_t);
+        for(uint32_t j = 0; j < root_dir_sectors; j++) {
+            uint8_t sector_data[boot_record.bytes_per_sector];
+            ata_read_sector(2048 + first_root_dir_sector + j, sector_data);
+            fat_dir_entry_t *entries = (fat_dir_entry_t *)sector_data;
+            for(uint32_t i = 0; i < entries_per_sector; i++) {
+                fat_dir_entry_t *e = &entries[i];
+
+                // Skip empty or deleted entries
+                // if(e->name[0] == 0x00) return 0;
+                // if((uint8_t)e->name[0] == 0xE5) continue;
+
+                // Check if it's a directory (fix operator precedence!)
+                if((e->attr & 0x10) != 0) {
+                    // Compare first 'length' characters of the name
+                    bool found = true;
+                    int i = 0;
+                    while(i < 11 && e->name[i] != 0x20) {
+                        if(e->name[i] != upper_name[i]) {
+                            found = false;
+                            break;
+                        }
+                        i++;
+                    }
+                    if(found) {
+                        // kprint("dapat ni: ", multiboot_info);
+                        // kprint(upper_name, multiboot_info);
+                        // print_char('\n', multiboot_info);
+                        // char clusterbuf[255];
+                        // to_string(e->first_cluster_lo, clusterbuf);
+                        // kprint("cluster: ", multiboot_info);
+                        // kprint(clusterbuf, multiboot_info);
+                        // print_char('\n', multiboot_info);
+                        return e->first_cluster_lo;
+                    }
+                }
+            }
+        }
+    } else {
+
+        uint32_t lba = cluster_to_LBA(cluster);
+        uint32_t entries_per_sector = boot_record.bytes_per_sector / sizeof(fat_dir_entry_t);
+        for(uint32_t j = 0; j < boot_record.sector_per_cluster; j++) {
+            uint8_t sector_data[boot_record.bytes_per_sector];
+            ata_read_sector(2048 + lba + j, sector_data);
+            fat_dir_entry_t *entries = (fat_dir_entry_t *)sector_data;
+            for(uint32_t i = 0; i < entries_per_sector; i++) {
+                fat_dir_entry_t *e = &entries[i];
+                
+                // Skip empty or deleted entries
+                // if(e->name[0] == 0x00) return 0;
+                // if((uint8_t)e->name[0] == 0xE5) continue;
+                
+                // Check if it's a directory (fix operator precedence!)
+                if((e->attr & 0x10) != 0) {
+                    // Compare first 'length' characters of the name
+                    if(memcmp(name, "..", 2) == 0) {
+                        // kprint("ini ..", multiboot_info);
+                        if(memcmp(e->name, "..", 2) == 0) {
+                            // kprint("ini dapat ..", multiboot_info);
+                            return e->first_cluster_lo;
+                        }
+                    }
+                    else {
+
+                        bool found = true;
+                        int i = 0;
+                        while(i < 11 && e->name[i] != 0x20) {
+                            if(e->name[i] != upper_name[i]) {
+                                found = false;
+                                break;
+                            }
+                            i++;
+                        }
+                        if(found) {
+                            // kprint("dapat ni: ", multiboot_info);
+                            // kprint(upper_name, multiboot_info);
+                            // print_char('\n', multiboot_info);
+                            // char clusterbuf[255];
+                            // to_string(e->first_cluster_lo, clusterbuf);
+                            // kprint("cluster: ", multiboot_info);
+                            // kprint(clusterbuf, multiboot_info);
+                            // print_char('\n', multiboot_info);
+                            return e->first_cluster_lo;
+                        }
+                    }
+                }
+            }
+        } 
+    }
+    kprint("not found: ", multiboot_info);
+    kprint(upper_name, multiboot_info);
+    print_char('\n', multiboot_info);
+    return -1;
+}
+
+// char *name_of_cluster(uint16_t cluster) {
+//     if(cluster < 2) {
+//         return "\0";
+//     } else {
+
+//         uint32_t lba = cluster_to_LBA(cluster);
+//         uint32_t entries_per_sector = boot_record.bytes_per_sector / sizeof(fat_dir_entry_t);
+//         for(uint32_t j = 0; j < boot_record.sector_per_cluster; j++) {
+//             uint8_t sector_data[boot_record.bytes_per_sector];
+//             ata_read_sector(2048 + lba + j, sector_data);
+//             fat_dir_entry_t *entries = (fat_dir_entry_t *)sector_data;
+//             for(uint32_t i = 0; i < entries_per_sector; i++) {
+//                 fat_dir_entry_t *e = &entries[i];
+                
+//                 // Skip empty or deleted entries
+//                 // if(e->name[0] == 0x00) return 0;
+//                 // if((uint8_t)e->name[0] == 0xE5) continue;
+                
+//                 // Check if it's a directory (fix operator precedence!)
+//                 if((e->attr & 0x10) != 0) {
+//                     // Compare first 'length' characters of the name
+//                     if(memcmp(e->name, upper_name, length) == 0) {
+//                         kprint("dapat ni: ", multiboot_info);
+//                         kprint(upper_name, multiboot_info);
+//                         print_char('\n', multiboot_info);
+//                         return e->first_cluster_lo;
+//                     }
+//                 }
+//             }
+//         } 
+//     }
+// }
+
 void create_entry(fat_dir_entry_t entry, uint16_t cluster) {
     uint16_t cluster_real = cluster;
     uint16_t table_value = 1;

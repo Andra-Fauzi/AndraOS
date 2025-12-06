@@ -62,3 +62,5 @@ void list_root_dir();
 void list_dir(uint16_t active_cluster);
 
 void readFATuntilEOC(uint16_t active_cluster);
+
+int find_cluster(uint16_t cluster, char *name, int length);

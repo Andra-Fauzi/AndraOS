@@ -6,19 +6,24 @@ volatile Task secondTask;
 volatile Task thirdTask;
 
 void secondMain() {
-	kprint("Hello multitasking world!", multiboot_info); // Not implemented here...
+	kprint("Hello multitasking world!", multiboot_info);
 	while(1) {
-		kprint("task 2 running!\n", multiboot_info);
-		asm volatile("hlt");
+		// kprint("task 2 running!\n", multiboot_info);
+		// Timer interrupt will switch tasks automatically
+		// for(volatile int i = 0; i < 10000000; i++); // Small delay to see output
+        // shell_run(multiboot_info);
+        asm volatile("hlt");
 	}
 }
 
 void thirdMain() {
-    kprint("Hello multitasking world!", multiboot_info); // Not implemented here...
+    kprint("Hello multitasking world!", multiboot_info);
     
 	while(1) {
-		kprint("task 3 running!\n", multiboot_info);
-		asm volatile("hlt");
+		// kprint("task 3 running!\n", multiboot_info);
+		// Timer interrupt will switch tasks automatically
+		// for(volatile int i = 0; i < 10000000; i++); // Small delay to see output
+        asm volatile("hlt");
 	}
 }
 

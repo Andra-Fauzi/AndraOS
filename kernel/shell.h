@@ -10,6 +10,12 @@
 #include "kernel_state.h"
 #include "multiboot_header.h"
 #include "fat.h"
+#include "tools_command/cd.h"
+
+typedef struct {
+	char name[255];
+	void (*function)(char *, int, multiboot_info_t *);
+} command_args_t;
 
 extern int32_t terminal_x;
 extern int32_t terminal_y;
