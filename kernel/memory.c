@@ -12,12 +12,41 @@ uint8_t *heap_start;
 uint8_t *heap_end;
 block_t *heap_head;
 
+extern uint32_t boot_page_directory;
+extern uint32_t boot_page_table1;
+extern uint8_t _kernel_end;
+
+uint32_t pd_index(uint32_t va) {
+	return (va >> 22) & 0x3FF;
+}
+
+uint32_t pt_index(uint32_t va) {
+	return (va >> 12) & 0x3FF;
+}
+
+/* Helper macros */
+uint32_t virt_to_phys(void *v) {
+    return (uint32_t)v - KERNEL_BASE;
+}
+void *phys_to_virt(uint32_t p) {
+    return (void *)(p + KERNEL_BASE);
+}
+
 void heap_init() {
-    heap_start = &_end;
+    // Heap starts right after kernel in VIRTUAL ADDRESS SPACE
+    heap_start = &_kernel_end;  // Already in higher-half (0xC0xxxxxx)
     heap_end = heap_start + HEAP_SIZE;
 
     // Align heap start
     heap_start = (uint8_t*)((uintptr_t)heap_start & ~(ALIGNMENT - 1));
+
+    // Map initial heap region (256KB should be enough for initial allocations)
+    // More pages will be mapped on-demand if needed
+    uint32_t heap_phys = (uint32_t)heap_start - KERNEL_BASE;
+    uint32_t initial_map_size = 256 * 1024; // 256KB = 64 pages
+    for (uint32_t i = 0; i < initial_map_size; i += PAGE_SIZE) {
+        map_page((uint32_t)heap_start + i, heap_phys + i, PTE_KERNEL_RW | PTE_PRESENT);
+    }
 
     heap_head = (block_t *)heap_start;
     heap_head->size = HEAP_SIZE - sizeof(block_t);
@@ -110,26 +139,7 @@ void free(void *ptr) {
     }
 }
 
-extern uint8_t _kernel_end;
 
-uint32_t pd_index(uint32_t va) {
-	return (va >> 22) & 0x3FF;
-}
-
-uint32_t pt_index(uint32_t va) {
-	return (va >> 12) & 0x3FF;
-}
-
-/* Helper macros */
-uint32_t virt_to_phys(void *v) {
-    return (uint32_t)v - KERNEL_BASE;
-}
-void *phys_to_virt(uint32_t p) {
-    return (void *)(p + KERNEL_BASE);
-}
-
-extern uint32_t boot_page_directory;
-extern uint32_t boot_page_table1;
 
 uint32_t alloc_page(void) {
     static uint32_t phys_page_ptr = 0;

@@ -87,26 +87,20 @@ extern uint8_t _end;
 uint32_t framebuffer_address;
 
 void kernel_main(multiboot_info_t *mb_info) {
-	/*map_page((uint32_t)0xC1000000, (uint32_t)mb_info, 3);
-	for(int i = 0; i < 1024; i++) {
-		map_page((uint32_t)(0xC2000000 + (i * 0x1000)), (uint32_t)(mb_info->framebuffer_addr + (i * 0x1000)), 3);
-	}
-	multiboot_info = (multiboot_info_t *)0xC1000000;
-	multiboot_info->framebuffer_addr = 0xC2000000;
-	*/
+	// mb_info comes from bootloader at a low physical address (e.g., 0x10000)
+	// We need to map the first 4MB back for multiboot access since boot.asm unmapped it
 	
-	// multiboot_info_t *mb_new = phys_to_virt((uint32_t)mb_info);
-	// lili = (uint32_t)mb_new->framebuffer_addr;
-	// multiboot_info->framebuffer_addr = lili;
-
-	uint32_t mb_info_phys = (uint32_t)mb_info;
-	uint32_t mb_info_virt = 0xC1000000; // virtual address to map multiboot info
-
-	map_page(mb_info_virt, mb_info_phys, PTE_KERNEL_RW | PTE_PRESENT);
-	multiboot_info = (multiboot_info_t *)mb_info_virt;
-
+	// Re-establish identity mapping for first 4MB (1024 pages) to access multiboot info
+	for (uint32_t i = 0; i < 1024; i++) {
+		map_page(i * 0x1000, i * 0x1000, PTE_KERNEL_RW | PTE_PRESENT);
+	}
+	
+	// Now mb_info should be accessible at its original address
+	multiboot_info = mb_info;
+	
+	// Map the framebuffer to high memory for easier access
 	uint32_t fb_phys = (uint32_t)multiboot_info->framebuffer_addr;
-	uint32_t fb_virt = 0xC2000000; // virtual address to
+	uint32_t fb_virt = 0xC2000000; // virtual address for framebuffer
 
 	uint32_t fb_size = multiboot_info->framebuffer_width * multiboot_info->framebuffer_height * (multiboot_info->framebuffer_bpp / 8);
 	uint32_t fb_pages = (fb_size + 0xFFF) / 0x1000; // round up to nearest page
@@ -115,30 +109,20 @@ void kernel_main(multiboot_info_t *mb_info) {
 		map_page(fb_virt + (i * 0x1000), fb_phys + (i * 0x1000), PTE_KERNEL_RW | PTE_PRESENT);
 	}
 
-	// for(uintptr_t i = 0; i < 0xC1000000; i += 0x1000) {
-	// 	map_page(i, i, PTE_KERNEL_RW | PTE_PRESENT);
-	// }
-
-	// map_page(fb_virt, fb_phys, PTE_KERNEL_RW | PTE_PRESENT);
+	// Update framebuffer address to use the mapped virtual address
 	multiboot_info->framebuffer_addr = fb_virt;
 	framebuffer_address = fb_virt;
 
 	kprint("halo", multiboot_info);
-	/*if(mb_info == NULL) {
-		for (;;) asm("hlt");
-	}
-	if(mb_info->framebuffer_addr == 0) {
-		for (;;) asm("hlt");
-	}
-	*/
+	
 	//multiboot_info = mb_info;
 	gdt_install();
 	idt_install();
 	isr_install();
-	asm volatile("sti");
+	heap_init();
 	irq_install();
+	asm volatile("sti");
 	initTasking();
-    	//heap_init();
 	//init_paging();
 
 
@@ -146,13 +130,35 @@ void kernel_main(multiboot_info_t *mb_info) {
 	extern void init_timer(uint32_t frequency);
 
 	init_keyboard();
+	kprint("After keyboard init\n", multiboot_info);
 	init_timer(10);
+	kprint("After timer init\n", multiboot_info);
 
-	init_shell(multiboot_info);
 
 	init_fat16();
+	kprint("After FAT init\n", multiboot_info);
 	
-	list_root_dir();
+	init_shell(multiboot_info);
+	kprint("After shell init - testing malloc\n", multiboot_info);
+
+	// Test malloc
+	char *nama = (char *)malloc(6);
+	memcpy(nama, "andra\0", 6);  // Copy "andra" + null terminator
+	kprint("Malloc result: ", multiboot_info);
+	kprint(nama, multiboot_info);
+	kprint(" at address: ", multiboot_info);
+	kprint_hex((uintptr_t)nama, multiboot_info);
+	kprint("\n", multiboot_info);
+	free(nama);
+	char *nama2 = (char *)malloc(6);
+	memcpy(nama2, "andra\0", 6);  // Copy "andra" + null terminator
+	kprint("Malloc result: ", multiboot_info);
+	kprint(nama2, multiboot_info);
+	kprint(" at address: ", multiboot_info);
+	kprint_hex((uintptr_t)nama2, multiboot_info);
+	kprint("\n", multiboot_info);
+	free(nama2);
+	kprint("Malloc test complete!\n", multiboot_info);
 
 
 	for (;;) {

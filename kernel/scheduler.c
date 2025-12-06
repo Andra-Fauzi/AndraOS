@@ -51,7 +51,7 @@ void createTask(Task *task, void (*main)(), uint32_t flags, uint32_t *pagedir) {
     task->regs.eflags = flags;
     task->regs.eip = (uint32_t) main;
     task->regs.cr3 = (uint32_t) pagedir;
-    task->regs.esp = (uint32_t) alloc_page() + 0x1000; // Not implemented here
+    task->regs.esp = (uint32_t) malloc(4096) + 0x1000; // Not implemented here
     task->next = 0;
 }
 

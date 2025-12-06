@@ -4,6 +4,7 @@
 #include "util.h"
 #include "terminal.h"
 #include "multiboot_header.h"
+#include "paging.h"
 
 #define HEAP_SIZE 0x1000000
 #define MIN_BLOCK_SIZE 16

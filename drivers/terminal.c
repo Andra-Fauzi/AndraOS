@@ -172,10 +172,20 @@ void clear_line(int line) {
 */
 
 void clear_screen(multiboot_info_t *mb_info) {
+	// Disable interrupts during framebuffer write to prevent corruption
+	asm volatile("cli");
+	
 	uint32_t *fb = (uint32_t *)framebuffer_address;
 	uint32_t VGA_WIDTH = mb_info->framebuffer_width;
 	uint32_t VGA_HEIGHT = mb_info->framebuffer_height;
 	uint32_t pitch = mb_info->framebuffer_pitch / 4;
+	
+	// Safety check: ensure we don't write beyond framebuffer
+	if (fb == NULL || VGA_WIDTH == 0 || VGA_HEIGHT == 0) {
+		asm volatile("sti");
+		return;
+	}
+	
 	for (int y = 0; y < VGA_HEIGHT; y++) {
 		for (int x = 0; x < VGA_WIDTH; x++) {
 			//terminal_buffer[j + (VGA_WIDTH * i)] = (0x0f << 8) | ' ';
@@ -184,6 +194,9 @@ void clear_screen(multiboot_info_t *mb_info) {
 	}
 	terminal_x = 0;
 	terminal_y = 0;
+	
+	// Re-enable interrupts
+	asm volatile("sti");
 }
 
 /*
