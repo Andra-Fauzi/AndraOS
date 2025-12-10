@@ -5,6 +5,7 @@
 #include "util.h"
 #include "terminal.h"
 #include "ata.h"
+#include "memory.h"
 
 typedef struct fat_BS {
 	//				offset
@@ -63,4 +64,9 @@ void list_dir(uint16_t active_cluster);
 
 void readFATuntilEOC(uint16_t active_cluster);
 
-int find_cluster(uint16_t cluster, char *name, int length);
+int find_cluster_dir(uint16_t cluster, char *name, int length);
+void readFATuntil10(uint16_t active_cluster);
+int find_cluster(uint16_t cluster, char name[11]);
+fat_dir_entry_t get_entry_file(uint16_t cluster, char name[11]);
+uint8_t *readfile(uint16_t active_cluster, char name[12]);
+void to_fat_name(char source[12], char destination[12]);

@@ -4,6 +4,7 @@ volatile Task *runningTask;
 volatile Task mainTask;
 volatile Task secondTask;
 volatile Task thirdTask;
+volatile bool ismultitasking = false;
 
 void secondMain() {
 	kprint("Hello multitasking world!", multiboot_info);
@@ -12,6 +13,7 @@ void secondMain() {
 		// Timer interrupt will switch tasks automatically
 		// for(volatile int i = 0; i < 10000000; i++); // Small delay to see output
         // shell_run(multiboot_info);
+		// asm volatile("hlt");
         asm volatile("hlt");
 	}
 }
@@ -39,6 +41,7 @@ void initTasking() {
     thirdTask.next = &mainTask;
 
     runningTask = &mainTask;
+    ismultitasking = true;
 }
 
 void createTask(Task *task, void (*main)(), uint32_t flags, uint32_t *pagedir) {

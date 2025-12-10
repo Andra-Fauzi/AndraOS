@@ -12,6 +12,7 @@
 #include "fat.h"
 #include "tools_command/cd.h"
 #include "tools_command/ls.h"
+#include "elf.h"
 
 typedef struct {
 	char name[255];
@@ -26,4 +27,4 @@ void init_shell(multiboot_info_t *mb_info);
 
 char shell_getchar();
 
-void shell_run();
+void shell_run(multiboot_info_t *mb_info);

@@ -1,4 +1,5 @@
 #include "isr.h"
+#include "syscall.h"
 
 void isr_install() {
 	idt_set_gate(0, (uint32_t)isr0, 0x08, 0x8E);
@@ -33,10 +34,15 @@ void isr_install() {
 	idt_set_gate(29, (uint32_t)isr29, 0x08, 0x8E);
 	idt_set_gate(30, (uint32_t)isr30, 0x08, 0x8E);
 	idt_set_gate(31, (uint32_t)isr31, 0x08, 0x8E);
+	idt_set_gate(128, (uint32_t)isr128, 0x08, 0x8E);
 }
 
 extern multiboot_info_t *multiboot_info;
 
 void isr_handler(struct regs *r) {
+	if (r->int_no == 128) {
+		syscall_handler(r);
+		return;
+	}
 	// kprint("interrupt terjadi", multiboot_info);
 }

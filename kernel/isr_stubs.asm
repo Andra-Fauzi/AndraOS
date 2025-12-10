@@ -217,8 +217,16 @@ isr31:
 	pushl $31
 	jmp isr_common_stub
 
+.globl isr128
+isr128:
+	cli
+	pushl $0
+	pushl $128
+	jmp isr_common_stub
+
 .globl isr_common_stub
 .extern isr_handler
+
 
 isr_common_stub:
 	pusha

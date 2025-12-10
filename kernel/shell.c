@@ -27,6 +27,7 @@ void init_shell(multiboot_info_t *mb_info) {
 	memset(args, 0, sizeof(args));
 	add_args("cd", c_cd, 2);
 	add_args("ls", c_ls, 2);
+	add_args("elf", c_elf, 3);
 }
 
 char shell_getchar() {

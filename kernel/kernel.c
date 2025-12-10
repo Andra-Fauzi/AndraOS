@@ -16,6 +16,7 @@
 #include "isolation.h"
 #include "scheduler.h"
 #include "fat.h"
+#include "userland.h"
 
 #if defined(__linux__)
 #error "You are not using cross compiler you will run to some trouble"
@@ -122,7 +123,7 @@ void kernel_main(multiboot_info_t *mb_info) {
 	heap_init();
 	irq_install();
 	asm volatile("sti");
-	initTasking();
+	//initTasking();
 	//init_paging();
 
 
@@ -138,29 +139,9 @@ void kernel_main(multiboot_info_t *mb_info) {
 	init_fat16();
 	kprint("After FAT init\n", multiboot_info);
 	
-	init_shell(multiboot_info);
-	kprint("After shell init - testing malloc\n", multiboot_info);
+	//init_shell(multiboot_info);
 
-	// Test malloc
-	char *nama = (char *)malloc(6);
-	memcpy(nama, "andra\0", 6);  // Copy "andra" + null terminator
-	kprint("Malloc result: ", multiboot_info);
-	kprint(nama, multiboot_info);
-	kprint(" at address: ", multiboot_info);
-	kprint_hex((uintptr_t)nama, multiboot_info);
-	kprint("\n", multiboot_info);
-	free(nama);
-	char *nama2 = (char *)malloc(6);
-	memcpy(nama2, "andra\0", 6);  // Copy "andra" + null terminator
-	kprint("Malloc result: ", multiboot_info);
-	kprint(nama2, multiboot_info);
-	kprint(" at address: ", multiboot_info);
-	kprint_hex((uintptr_t)nama2, multiboot_info);
-	kprint("\n", multiboot_info);
-	free(nama2);
-	kprint("Malloc test complete!\n", multiboot_info);
-
-
+	// switchToUserland();
 	for (;;) {
 		shell_run(multiboot_info);
 		asm volatile("hlt");

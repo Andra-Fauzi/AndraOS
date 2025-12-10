@@ -7,7 +7,7 @@ void c_cd(char *buffer, int length, multiboot_info_t *mb_info) {
 	char command_args[3][128];
 	substr(buffer, ' ', length, command_args);
 	if(command_args[1][0] != '\0') {
-		int hasil = find_cluster(active_cluster, command_args[1], length-3);
+		int hasil = find_cluster_dir(active_cluster, command_args[1], length-3);
 		if(hasil == -1) {
 			kprint("folder tidak di temukan\n", mb_info);
 		}

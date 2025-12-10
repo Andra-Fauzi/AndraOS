@@ -6,7 +6,7 @@ extern uint8_t _end;
 #define MIN_BLOCK_SIZE 16
 #define ALIGNMENT 4
 #define PAGE_SIZE 4096
-
+#define HEAP_REGION 100 * 1024
 
 uint8_t *heap_start;
 uint8_t *heap_end;
@@ -43,7 +43,7 @@ void heap_init() {
     // Map initial heap region (256KB should be enough for initial allocations)
     // More pages will be mapped on-demand if needed
     uint32_t heap_phys = (uint32_t)heap_start - KERNEL_BASE;
-    uint32_t initial_map_size = 256 * 1024; // 256KB = 64 pages
+    uint32_t initial_map_size = HEAP_REGION; // 1000KB = 64 pages
     for (uint32_t i = 0; i < initial_map_size; i += PAGE_SIZE) {
         map_page((uint32_t)heap_start + i, heap_phys + i, PTE_KERNEL_RW | PTE_PRESENT);
     }
@@ -143,7 +143,7 @@ void free(void *ptr) {
 
 uint32_t alloc_page(void) {
     static uint32_t phys_page_ptr = 0;
-    uint32_t phys_kernel_end = (uint32_t)&_kernel_end - KERNEL_BASE;
+    uint32_t phys_kernel_end = (uint32_t)&_kernel_end - KERNEL_BASE + HEAP_REGION;
     uint32_t heap_phys_end = phys_kernel_end + HEAP_SIZE;
 
     if (phys_page_ptr == 0) {
