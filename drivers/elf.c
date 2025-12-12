@@ -71,10 +71,10 @@ void c_elf(char *buffer, int length, multiboot_info_t *mb_info) {
 	}
 	*/
 	// entry();
+	asm volatile("sti");
 	if (entry == NULL) return;
 
 	entry();
-	asm volatile("sti");
 
 	// we work on that later
 	

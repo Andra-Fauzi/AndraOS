@@ -179,7 +179,7 @@ void clear_screen(multiboot_info_t *mb_info) {
 	uint32_t VGA_WIDTH = mb_info->framebuffer_width;
 	uint32_t VGA_HEIGHT = mb_info->framebuffer_height;
 	uint32_t pitch = mb_info->framebuffer_pitch / 4;
-	
+
 	// Safety check: ensure we don't write beyond framebuffer
 	if (fb == NULL || VGA_WIDTH == 0 || VGA_HEIGHT == 0) {
 		asm volatile("sti");

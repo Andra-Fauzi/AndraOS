@@ -139,7 +139,77 @@ void kernel_main(multiboot_info_t *mb_info) {
 	init_fat16();
 	kprint("After FAT init\n", multiboot_info);
 	
-	//init_shell(multiboot_info);
+	init_shell(multiboot_info);
+
+	kprint("test cpuid\n", multiboot_info);
+
+	uint32_t cpuid_b;
+	uint32_t cpuid_c;
+	uint32_t cpuid_d;
+	asm volatile("mov $0x0, %eax");
+	asm volatile("cpuid");
+	asm volatile("mov %%ebx, %0" : "=r"(cpuid_b));
+	asm volatile("mov %%ecx, %0" : "=r"(cpuid_c));
+	asm volatile("mov %%edx, %0" : "=r"(cpuid_d));
+	char buffer_s[255];
+	to_string(cpuid_b, buffer_s);
+	kprint(buffer_s, multiboot_info);
+	kprint("\n", multiboot_info);
+	to_string(cpuid_c, buffer_s);
+	kprint(buffer_s, multiboot_info);
+	kprint("\n", multiboot_info);
+	to_string(cpuid_d, buffer_s);
+	kprint(buffer_s, multiboot_info);
+	kprint("\n", multiboot_info);
+	kprint("\n", multiboot_info);
+	kprint("\n", multiboot_info);
+
+	kprint("lihat nilai ini jadi char\n", multiboot_info);
+	char pertama = (cpuid_b & 0xFF);
+	kprint("pertama\n", multiboot_info);
+	to_string(pertama, buffer_s);
+	kprint("hasil nya: ", multiboot_info);
+	kprint(buffer_s, multiboot_info);
+	kprint("\n", multiboot_info);
+	kprint("hasil nya di char: ", multiboot_info);
+	print_char(pertama, multiboot_info);
+	kprint("\n", multiboot_info);
+	char kedua = ((cpuid_b >> 2) & 0xFF);
+	kprint("kedua\n", multiboot_info);
+	to_string(kedua, buffer_s);
+	kprint("hasil nya: ", multiboot_info);
+	kprint(buffer_s, multiboot_info);
+	kprint("\n", multiboot_info);
+	kprint("hasil nya di char: ", multiboot_info);
+	print_char(kedua, multiboot_info);
+	kprint("\n", multiboot_info);
+	char ketiga = ((cpuid_b >> 4) & 0xFF);
+	kprint("ketiga\n", multiboot_info);
+	to_string(ketiga, buffer_s);
+	kprint("hasil nya: ", multiboot_info);
+	kprint(buffer_s, multiboot_info);
+	kprint("\n", multiboot_info);
+	kprint("hasil nya di char: ", multiboot_info);
+	print_char(ketiga, multiboot_info);
+	kprint("\n", multiboot_info);
+	char keempat = ((cpuid_b >> 6) & 0xFF);
+	kprint("keempat\n", multiboot_info);
+	to_string(keempat, buffer_s);
+	kprint("hasil nya: ", multiboot_info);
+	kprint(buffer_s, multiboot_info);
+	kprint("\n", multiboot_info);
+	kprint("hasil nya di char: ", multiboot_info);
+	print_char(keempat, multiboot_info);
+	kprint("\n", multiboot_info);
+
+
+	kprint("test idk\n", multiboot_info);
+	to_string(multiboot_info->framebuffer_height, buffer_s);
+	kprint(buffer_s, multiboot_info);
+	kprint("\n", multiboot_info);
+	to_string(multiboot_info->framebuffer_width, buffer_s);
+	kprint(buffer_s, multiboot_info);
+	kprint("\n", multiboot_info);
 
 	// switchToUserland();
 	for (;;) {

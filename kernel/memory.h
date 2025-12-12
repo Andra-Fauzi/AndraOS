@@ -1,6 +1,6 @@
+#pragma once
 #include <stdint.h>
 #include <stdbool.h>
-#pragma once
 #include "util.h"
 #include "terminal.h"
 #include "multiboot_header.h"

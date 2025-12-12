@@ -1,6 +1,6 @@
+#pragma once
 #include <stdint.h>
 
-#pragma once
 #include "memory.h"
 #include "paging.h"
 

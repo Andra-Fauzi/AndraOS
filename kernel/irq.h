@@ -1,5 +1,5 @@
-#include <stdint.h>
 #pragma once
+#include <stdint.h>
 
 #include "pic.h"
 #include "port_io.h"

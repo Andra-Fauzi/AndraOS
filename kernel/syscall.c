@@ -32,6 +32,19 @@ void syscall_handler(struct regs *r) {
     		    asm volatile("cli");
 	    }
 	    break;
+	case 3: 
+	    {
+		    clear_screen(multiboot_info);
+	    }
+	    break;
+	case 4: 
+	    {
+		    uint32_t x = r->ebx;
+		    uint32_t y = r->ecx;
+		    uint32_t color = 0xFFFFFFFF;
+		    draw_pixel(multiboot_info, x, y, color);
+	    }
+	    break;
         default:
             kprint("Unknown syscall\n", multiboot_info);
             break;

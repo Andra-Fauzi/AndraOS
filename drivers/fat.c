@@ -27,6 +27,56 @@ void to_fat_name(char source[12], char destination[12]) {
 	destination[11] = '\0';
 }
 
+void to_fat_name_83(const char *src, char dest[12]) {
+    // Inisialisasi dengan spaces
+    for (int i = 0; i < 11; i++)
+        dest[i] = ' ';
+    dest[11] = '\0';
+
+    // Bagian nama (8 char)
+    int di = 0;
+    int si = 0;
+
+    // salin nama sampai '.' atau sampai 8
+    while (src[si] && src[si] != '.' && di < 8) {
+        char c = src[si++];
+        dest[di++] = (unsigned char)c;
+    }
+
+    // kalau ada '.', lompat
+    if (src[si] == '.')
+        si++;
+
+    // Bagian ekstensi (3 char)
+    di = 8;
+    int ei = 0;
+    while (src[si] && ei < 3) {
+        char c = src[si++];
+        dest[di++] = (unsigned char)c;
+        ei++;
+    }
+}
+
+void to_fat_name_fixed(const char *source, char dest[11]) {
+    // Reset semua ke space
+    for (int i = 0; i < 11; i++) dest[i] = ' ';
+
+    int j = 0;
+    int dot_seen = 0;
+    for (int i = 0; source[i] != '\0' && j < 11; i++) {
+        char c = source[i];
+        if (c == '.') {
+            j = 8;  // pindah ke ekstensi
+            dot_seen = 1;
+            continue;
+        }
+        // uppercase
+        if (c >= 'a' && c <= 'z') c -= 32;
+        dest[j++] = c;
+    }
+}
+
+
 fat_BS_t parse_BS(const char *buffer) {
 	fat_BS_t _boot_record;
 	memcpy(&_boot_record, buffer, sizeof(fat_BS_t));
@@ -321,10 +371,10 @@ uint32_t cluster_to_LBA(uint16_t cluster) {
 
 int find_cluster_dir(uint16_t cluster, char *name, int length) {
     // Convert input name to uppercase for FAT16 matching
-    char upper_name[128];
-    memcpy(upper_name, name, length);
+    char upper_name[11];
     // upper_name[length] = '\0';
-    str_to_upper(upper_name, length);
+    // str_to_upper(upper_name, length);
+    to_fat_name_fixed(name, upper_name);
     // kprint(upper_name, multiboot_info);
 
     if(cluster < 2) {
@@ -498,9 +548,10 @@ void create_entry_in_root_directory(fat_dir_entry_t entry) {
 int find_cluster(uint16_t cluster, char name[11]) {
     // Convert input name to uppercase for FAT16 matching
     char upper_name[11];
-    memcpy(upper_name, name, 11);
+    // memcpy(upper_name, name, 11);
     // upper_name[length] = '\0';
-    str_to_upper(upper_name, 11);
+    // str_to_upper(upper_name, 11);
+    to_fat_name_fixed(name, upper_name);
     //kprint(upper_name, multiboot_info);
 
     if(cluster < 2) {
@@ -587,9 +638,10 @@ int find_cluster(uint16_t cluster, char name[11]) {
 fat_dir_entry_t get_entry_file(uint16_t cluster, char name[11]) {
     // Convert input name to uppercase for FAT16 matching
     char upper_name[11];
-    memcpy(upper_name, name, 11);
+    // memcpy(upper_name, name, 11);
     // upper_name[length] = '\0';
-    str_to_upper(upper_name, 11);
+    // str_to_upper(upper_name, 11);
+    to_fat_name_fixed(name, upper_name);
     // kprint(upper_name, multiboot_info);
 
     if(cluster < 2) {
@@ -667,6 +719,7 @@ fat_dir_entry_t get_entry_file(uint16_t cluster, char name[11]) {
             }
         } 
     }
+    print_char('\n', multiboot_info);
     kprint("not found: ", multiboot_info);
     kprint(upper_name, multiboot_info);
     print_char('\n', multiboot_info);
@@ -675,7 +728,7 @@ fat_dir_entry_t get_entry_file(uint16_t cluster, char name[11]) {
 uint8_t *readfile(uint16_t active_cluster, char real_name[12]) {
 	char name[12];
 	memset(name, ' ', 12);
-	to_fat_name(real_name, name);
+	to_fat_name_fixed(real_name, name);
 	int cluster = find_cluster(active_cluster, name);
 	if(cluster == -1) {
 		kprint("tidak ditemukan\n", multiboot_info);
@@ -716,3 +769,113 @@ uint8_t *readfile(uint16_t active_cluster, char real_name[12]) {
 	return file;
 }
 
+uint16_t find_free_cluster() {
+    for (uint16_t i = 2; i < total_clusters + 2; i++) {
+        if (readFATTable(i) == 0x0000) {
+            return i;
+        }
+    }
+    return 0xFFFF; // Full
+}
+
+void writefile(uint16_t parent_cluster, const char *name, void *buffer, uint32_t size) {
+    char fat_name[11];
+    to_fat_name_fixed(name, fat_name);
+
+    if (find_cluster(parent_cluster, fat_name) != -1) {
+        kprint("File already exists\n", multiboot_info);
+        return;
+    }
+
+    uint32_t bytes_per_cluster = boot_record.sector_per_cluster * boot_record.bytes_per_sector;
+    uint32_t num_clusters = (size + bytes_per_cluster - 1) / bytes_per_cluster;
+    if (num_clusters == 0) num_clusters = 1;
+
+    uint16_t first_cluster = 0xFFFF;
+    uint16_t prev_cluster = 0xFFFF;
+    uint16_t allocated_clusters[num_clusters]; // track untuk rollback
+    uint8_t *buf_ptr = (uint8_t *)buffer;
+    uint32_t remaining_size = size;
+
+    for (uint32_t i = 0; i < num_clusters; i++) {
+        uint16_t current_cluster = find_free_cluster();
+        if (current_cluster == 0xFFFF) {
+            kprint("Disk Full, rollback\n", multiboot_info);
+            // rollback
+            for (uint32_t j = 0; j < i; j++) writeFATTable(allocated_clusters[j], 0x0000);
+            return;
+        }
+
+        allocated_clusters[i] = current_cluster;
+
+        if (first_cluster == 0xFFFF) first_cluster = current_cluster;
+        if (prev_cluster != 0xFFFF) writeFATTable(prev_cluster, current_cluster);
+        prev_cluster = current_cluster;
+
+        uint32_t lba = cluster_to_LBA(current_cluster);
+        uint8_t sector_buf[512];
+
+        for (int s = 0; s < boot_record.sector_per_cluster; s++) {
+            memset(sector_buf, 0, 512);
+            uint32_t copy_size = (remaining_size < 512) ? remaining_size : 512;
+            if (remaining_size > 0) {
+                memcpy(sector_buf, buf_ptr, copy_size);
+                buf_ptr += copy_size;
+                remaining_size -= copy_size;
+            }
+            ata_write_sector(2048 + lba + s, sector_buf);
+        }
+    }
+
+    // set EOF di cluster terakhir
+    writeFATTable(prev_cluster, 0xFFFF);
+
+    // buat directory entry
+    fat_dir_entry_t new_entry;
+    memset(&new_entry, 0, sizeof(new_entry));
+    memcpy(new_entry.name, fat_name, 11);
+    new_entry.attr = 0x20; // file
+    new_entry.first_cluster_lo = first_cluster;
+    new_entry.file_size = size;
+
+    // tulis ke directory
+    if (parent_cluster < 2) {
+        // root dir
+        uint32_t entries_per_sector = boot_record.bytes_per_sector / sizeof(fat_dir_entry_t);
+        for (uint32_t s = 0; s < root_dir_sectors; s++) {
+            uint8_t sector_data[512];
+            ata_read_sector(2048 + first_root_dir_sector + s, sector_data);
+            fat_dir_entry_t *entries = (fat_dir_entry_t *)sector_data;
+            for (uint32_t e = 0; e < entries_per_sector; e++) {
+                if (entries[e].name[0] == 0x00 || (uint8_t)entries[e].name[0] == 0xE5) {
+                    entries[e] = new_entry;
+                    ata_write_sector(2048 + first_root_dir_sector + s, sector_data);
+                    return;
+                }
+            }
+        }
+    } else {
+        // subdirectory
+        uint16_t p_cluster = parent_cluster;
+        while (p_cluster < 0xFFF8) {
+            uint32_t lba = cluster_to_LBA(p_cluster);
+            uint32_t entries_per_sector = boot_record.bytes_per_sector / sizeof(fat_dir_entry_t);
+            for (int s = 0; s < boot_record.sector_per_cluster; s++) {
+                uint8_t sector_data[512];
+                ata_read_sector(2048 + lba + s, sector_data);
+                fat_dir_entry_t *entries = (fat_dir_entry_t *)sector_data;
+                for (uint32_t e = 0; e < entries_per_sector; e++) {
+                    if (entries[e].name[0] == 0x00 || (uint8_t)entries[e].name[0] == 0xE5) {
+                        entries[e] = new_entry;
+                        ata_write_sector(2048 + lba + s, sector_data);
+                        return;
+                    }
+                }
+            }
+            uint16_t next = readFATTable(p_cluster);
+            if (next >= 0xFFF8) break;
+            p_cluster = next;
+        }
+    }
+    kprint("Directory full\n", multiboot_info);
+}

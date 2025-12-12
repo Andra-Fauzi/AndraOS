@@ -1,7 +1,7 @@
+#pragma once
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
-#pragma once
 
 #include "terminal.h"
 #include "keyboard.h"
@@ -22,6 +22,14 @@ typedef struct {
 
 extern int32_t terminal_x;
 extern int32_t terminal_y;
+
+void c_cd(char* buffer, int length, multiboot_info_t *mb_info);
+void c_ls(char* buffer, int length, multiboot_info_t *mb_info);
+void c_elf(char* buffer, int length, multiboot_info_t *mb_info);
+void c_compile(char* buffer, int length, multiboot_info_t *mb_info);
+
+/* Compiler interface */
+int subc_compile(char *src, int src_len, char *dest, size_t dest_max, size_t *dest_len);
 
 void init_shell(multiboot_info_t *mb_info);
 

@@ -8,7 +8,12 @@ CFLAGS := -g -std=gnu99 -ffreestanding -O0 -Wall -Wextra -m32 -I./boot -I./kerne
 ASFLAGS := -g
 LDFLAGS := -T boot/linker.ld -O0 -nostdlib -m elf_i386
 
-C_SOURCES := $(shell find boot kernel drivers lib -name '*.c')
+# Chibicc compiler integration
+CHIBICC_DIR := chibicc-main
+CHIBICC_SRCS := codegen.c hashmap.c main.c parse.c preprocess.c strings.c tokenize.c type.c unicode.c
+CHIBICC_C_SOURCES := $(addprefix $(CHIBICC_DIR)/, $(CHIBICC_SRCS))
+
+C_SOURCES := $(shell find boot kernel drivers lib -name '*.c' -not -path '$(CHIBICC_DIR)/*') $(CHIBICC_C_SOURCES)
 ASM_SOURCES := $(shell find boot kernel drivers lib -name '*.asm')
 
 OBJ_C := $(patsubst %.c, obj/%.o, $(C_SOURCES))
@@ -18,7 +23,6 @@ OBJ := $(OBJ_C) $(OBJ_ASM)
 all: $(TARGET)
 
 $(OBJ): | objdirs
-
 
 objdirs:
 	mkdir -p $(dir $(OBJ))
@@ -35,7 +39,7 @@ obj/%.o: %.asm
 
 
 $(TARGET) : $(OBJ)
-	@echo "[LD] Linking kernel ..."
+	@echo "[LD] Linking kernel with compiler..."
 	@$(LD) -m elf_i386 $(OBJ) $(LDFLAGS) -o $(TARGET)
 
 

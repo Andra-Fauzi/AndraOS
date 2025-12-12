@@ -1,5 +1,3 @@
-#include <stdint.h>
-
 void kprint(char *str) {
 	int i = 0;
 	while(str[i]) {
@@ -13,18 +11,33 @@ void print_char(char c) {
 }
 
 char getinput() {
-	uint32_t c = (uint32_t)0;
+	unsigned int c = (unsigned int)0;
 	asm volatile("int $0x80" :: "a"(2), "b"(c));
 	asm volatile("mov %0, %%ebx" : "=b"(c));
 	return (char)c;
 }
 
+void clear_screen() {
+	asm volatile("int $0x80" :: "a"(3));
+}
+
+void draw_pixel(unsigned int x, unsigned int y) {
+	asm volatile("int $0x80" :: "a"(4), "b"(x), "c"(y));
+}
+
 int main() {
 	kprint("Hello World\n");
-	kprint("Zilfa\n");
+	kprint("Najed\n");
 	char buffer[255];
 	int i = 0;
 	char input;
+	/*
+	clear_sreen();
+	for(uint32_t y = 0; y < 600; y++) {
+		for(uint32_t x = 0; x < 800; x++) {
+			draw_pixel(x, y);
+		}
+	}
 	while(true) {
 		input = getinput();
 		print_char(input);
@@ -32,5 +45,6 @@ int main() {
 			break;
 		}
 	}
+	*/
 	return 0;
 }

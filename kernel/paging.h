@@ -1,8 +1,8 @@
+#pragma once
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
-#pragma once
 
 #include "util.h"
 #include "memory.h"

@@ -1,6 +1,6 @@
+#pragma once
 #include <stdint.h>
 
-#pragma once
 
 typedef struct {
 	uint32_t flags;
