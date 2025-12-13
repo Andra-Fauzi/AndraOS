@@ -136,11 +136,12 @@ void kernel_main(multiboot_info_t *mb_info) {
 	kprint("After timer init\n", multiboot_info);
 
 
+	
+	init_shell(multiboot_info);
+	
 	init_fat16();
 	kprint("After FAT init\n", multiboot_info);
 	
-	init_shell(multiboot_info);
-
 	kprint("test cpuid\n", multiboot_info);
 
 	uint32_t cpuid_b;

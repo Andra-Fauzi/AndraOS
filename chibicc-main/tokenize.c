@@ -25,6 +25,7 @@ void error(char *fmt, ...) {
 //
 // foo.c:10: x = y + 1;
 //               ^ <error message here>
+extern multiboot_info_t *multiboot_info;
 static void verror_at(char *filename, char *input, int line_no,
                       char *loc, char *fmt, va_list ap) {
   // Find a line containing `loc`.
@@ -47,6 +48,7 @@ static void verror_at(char *filename, char *input, int line_no,
   //fprintf(stderr, "^ ");
   chi_vprintf(stderr, fmt, ap);
   chi_printf(stderr, "\n");
+  kprint(stderr->buf, multiboot_info);
 }
 
 void error_at(char *loc, char *fmt, ...) {
@@ -638,7 +640,8 @@ Token *tokenize(File *file) {
 
 // Returns the contents of a given file.
 static char *read_file(char *path) {
-  char *buf = readfile(active_cluster, path);
+  int size = 0;
+  char *buf = readfile(active_cluster, path, &size);
   return buf;
 }
 

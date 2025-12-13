@@ -6,7 +6,8 @@ extern multiboot_info_t *multiboot_info;
 extern void switch_to_userland(uint32_t entry, uint32_t stack);
 
 void *load_elf(uint16_t cluster, char name[12]) {
-    uint8_t *file = readfile(cluster, name);
+	int size = 0;
+    uint8_t *file = readfile(cluster, name, &size);
     if (!file) return NULL;
 
     Elf32_Ehdr *eh = (Elf32_Ehdr*)file;

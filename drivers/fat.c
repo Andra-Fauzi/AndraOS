@@ -725,13 +725,14 @@ fat_dir_entry_t get_entry_file(uint16_t cluster, char name[11]) {
     print_char('\n', multiboot_info);
 }
 
-uint8_t *readfile(uint16_t active_cluster, char real_name[12]) {
+uint8_t *readfile(uint16_t active_cluster, char real_name[12], int *out_size) {
 	char name[12];
 	memset(name, ' ', 12);
 	to_fat_name_fixed(real_name, name);
 	int cluster = find_cluster(active_cluster, name);
 	if(cluster == -1) {
 		kprint("tidak ditemukan\n", multiboot_info);
+		if (out_size) *out_size = 0;
 		return NULL;
 	}
 	fat_dir_entry_t entry = get_entry_file(active_cluster, name);
@@ -766,6 +767,7 @@ uint8_t *readfile(uint16_t active_cluster, char real_name[12]) {
 		}
 		table_value = readFATTable(table_value);
 	}
+	if (out_size) *out_size = size;
 	return file;
 }
 

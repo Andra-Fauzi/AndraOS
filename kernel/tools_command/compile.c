@@ -57,6 +57,7 @@ void c_compile(char* buffer, int length, multiboot_info_t *mb_info) {
     
     char *input_file = args[1];
     char *output_file = args[2];
+    int src_len = 0;  // Will be filled by readfile
     
     kprint("Reading input file: ", mb_info);
     kprint(input_file, mb_info);
@@ -77,22 +78,22 @@ void c_compile(char* buffer, int length, multiboot_info_t *mb_info) {
     to_string(active_cluster, buffer1);
     kprint(buffer1, mb_info);
     print_char('\n', mb_info);
-    char *src_buffer = (char*)readfile(active_cluster, input_file);
+    char *src_buffer = (char*)readfile(active_cluster, input_file, &src_len);
     
     if (!src_buffer) {
         kprint("Failed to read input file or file not found\n", mb_info);
         return;
     }
     
-    // Calculate source length (assuming null terminated text file or use file size if readfile returned it? 
-    // readfile returns just pointer. In a real OS we'd get size too.
-    // For now assuming null terminated as it is likely a source code string.
-    int src_len = 0;
-    while (src_buffer[src_len]) src_len++; 
+    // src_len is now exact file size from readfile()
+    // Ensure null terminator for safety
+    if (src_len < 65535) {
+        src_buffer[src_len] = '\0';
+    } 
     
     // 2. Alloc output buffer
     // Assuming simple flat allocation for now
-    char *dest_buffer = (char*)malloc(1024); // 64KB output buffer
+    char *dest_buffer = (char*)malloc(256 * 1024); // 256KB output buffer
     if (!dest_buffer) {
         kprint("Failed to allocate output buffer\n", mb_info);
         // free(src_buffer); // Memory leak if we don't have free, but acceptable for this stage
@@ -104,10 +105,14 @@ void c_compile(char* buffer, int length, multiboot_info_t *mb_info) {
     kprint("Compiling...\n", mb_info);
     
     // 3. Compile
-    int ret = subc_compile(src_buffer, src_len, dest_buffer, 1024, &dest_len);
+    int ret = subc_compile(src_buffer, src_len, dest_buffer, 256 * 1024, &dest_len);
     
     if (ret == 0) {
-        kprint("Compilation successful!\n", mb_info);
+        kprint("Compilation successful! Size: ", mb_info);
+        char size_str[16];
+        to_string(dest_len, size_str);
+        kprint(size_str, mb_info);
+        kprint("\n", mb_info);
         
         // 4. Write output file
         kprint("Writing to output file: ", mb_info);
@@ -118,7 +123,11 @@ void c_compile(char* buffer, int length, multiboot_info_t *mb_info) {
         
         kprint("Done.\n", mb_info);
     } else {
-        kprint("Compilation failed.\n", mb_info);
+        kprint("Compilation failed. Error code: ", mb_info);
+        char err_str[16];
+        to_string(ret, err_str);
+        kprint(err_str, mb_info);
+        kprint("\n", mb_info);
     }
     
     // Free buffers if possible

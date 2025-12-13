@@ -4,7 +4,7 @@ char command_buffer[256];
 int length_command = 0;
 uint16_t active_cluster = 0;
 char current_dir[255];
-command_args_t args[5];
+command_args_t args[10];
 int args_count = 0;
 
 
@@ -29,6 +29,8 @@ void init_shell(multiboot_info_t *mb_info) {
 	add_args("ls", c_ls, 2);
 	add_args("elf", c_elf, 3);
 	add_args("compile", c_compile, 7);
+	add_args("cat", c_cat, 3);
+	add_args("createfile", c_create_file, 10);
 }
 
 char shell_getchar() {

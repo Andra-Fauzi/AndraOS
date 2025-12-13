@@ -13,6 +13,8 @@
 #include "tools_command/cd.h"
 #include "tools_command/ls.h"
 #include "elf.h"
+#include "tools_command/cat.h"
+#include "tools_command/create_file.h"
 
 typedef struct {
 	char name[255];

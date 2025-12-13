@@ -68,7 +68,7 @@ int find_cluster_dir(uint16_t cluster, char *name, int length);
 void readFATuntil10(uint16_t active_cluster);
 int find_cluster(uint16_t cluster, char name[11]);
 fat_dir_entry_t get_entry_file(uint16_t cluster, char name[11]);
-uint8_t *readfile(uint16_t active_cluster, char name[12]);
+uint8_t *readfile(uint16_t active_cluster, char name[12], int *out_size);
 void writefile(uint16_t parent_cluster, const char *name, void *buffer, uint32_t size);
 void to_fat_name(char source[12], char destination[12]);
 void to_fat_name_83(const char *src, char dest[12]);

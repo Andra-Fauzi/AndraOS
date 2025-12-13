@@ -164,10 +164,26 @@ int file_exists(char *path) {
     return 1;
 }
 
+// Global exit status for chibicc errors
+static int chibicc_exit_status = 0;
+
 void exit(int status) {
-    // Halt the kernel
-    __asm__("cli");
-    __asm__("hlt");
+    // In kernel context, don't halt - just save exit status
+    // The compiler wrapper will check this and return error
+    chibicc_exit_status = status;
+    // Use longjmp-like mechanism or just return
+    // For now, we'll use a goto pattern by throwing error via error_tok
+    // But simpler: just set flag and return
+}
+
+// Get the exit status that was set
+int get_chibicc_exit_status(void) {
+    return chibicc_exit_status;
+}
+
+// Reset exit status
+void reset_chibicc_exit_status(void) {
+    chibicc_exit_status = 0;
 }
 
 // Global variables for chibicc
@@ -186,11 +202,10 @@ int subc_compile(char *src, int src_len, char *dest, size_t dest_max, size_t *de
     extern int chibicc_run_from_memory(char *out, size_t out_size, size_t *out_len);
     
     // Allocate temporary buffer for assembly output
-    char *asm_buffer = (char *)malloc(16384);  // 16KB for assembly
-    if (!asm_buffer) {
-        if (dest_len) *dest_len = 0;
-        return 1;  // Memory error
-    }
+    static char asm_buffer[16384];  // 16KB for assembly
+    
+    // Reset exit status before compilation
+    reset_chibicc_exit_status();
     
     // Set source buffer for chibicc
     chibicc_set_source((uint8_t *)src, src_len);
@@ -198,6 +213,27 @@ int subc_compile(char *src, int src_len, char *dest, size_t dest_max, size_t *de
     // Run compilation from memory - produces assembly code
     size_t asm_len = 0;
     int result = chibicc_run_from_memory(asm_buffer, 16384, &asm_len);
+
+    extern multiboot_info_t *multiboot_info;
+    extern uint16_t active_cluster;
+    kprint("hasil buffer : \n", multiboot_info);
+    kprint(asm_buffer, multiboot_info);
+    print_char('\n', multiboot_info);
+    kprint("panjang buffer : \n", multiboot_info);
+    char len_str[255];
+    to_string(asm_len, len_str);
+    kprint(len_str, multiboot_info);
+    print_char('\n', multiboot_info);
+
+    writefile(0, "kenapa.asm", asm_buffer, asm_len);
+    
+    // Check if chibicc called exit() due to error
+    int exit_status = get_chibicc_exit_status();
+    if (exit_status != 0) {
+        if (dest_len) *dest_len = 0;
+        // free(asm_buffer);
+        return 1;  // Chibicc compilation error
+    }
     
     if (result != 0 || asm_len == 0) {
         if (dest_len) *dest_len = 0;

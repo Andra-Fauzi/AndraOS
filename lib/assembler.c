@@ -1,34 +1,7 @@
 #include "assembler.h"
 #include "util.h"
 
-// Simple x86 instruction encoder
-typedef struct {
-    char *mnemonic;
-    uint8_t opcode;
-    int args;  // Number of arguments
-} Instruction;
-
-static Instruction instructions[] = {
-    {"ret", 0xC3, 0},
-    {"nop", 0x90, 0},
-    {"push", 0x50, 1},
-    {"pop", 0x58, 1},
-    {"mov", 0x89, 2},
-    {"add", 0x01, 2},
-    {"sub", 0x29, 2},
-    {"xor", 0x31, 2},
-    {"and", 0x21, 2},
-    {"or", 0x09, 2},
-    {"cmp", 0x39, 2},
-    {"je", 0x74, 1},
-    {"jne", 0x75, 1},
-    {"jmp", 0xEB, 1},
-    {"call", 0xE8, 1},
-    {"lea", 0x8D, 2},
-    {NULL, 0, 0}
-};
-
-// x86 register encoding
+// x86-32 register encoding and names
 typedef struct {
     char *name;
     uint8_t code;
@@ -43,16 +16,30 @@ static Register registers[] = {
     {"ebp", 5},
     {"esi", 6},
     {"edi", 7},
-    {"rax", 0},
-    {"rcx", 1},
-    {"rdx", 2},
-    {"rbx", 3},
-    {"rsp", 4},
-    {"rbp", 5},
-    {"rsi", 6},
-    {"rdi", 7},
     {NULL, 0}
 };
+
+// Operand types
+typedef enum {
+    OP_NONE,
+    OP_REG,      // register
+    OP_IMM,      // immediate value
+    OP_MEM,      // memory [reg + offset]
+} OperandType;
+
+typedef struct {
+    OperandType type;
+    int reg;     // register code (0-7)
+    int value;   // immediate or offset
+} Operand;
+
+// Instruction encoding helper
+typedef struct {
+    uint8_t opcode;
+    uint8_t modrm_byte;  // Combined encoding
+    int has_immediate;
+    int immediate;
+} EncodedInst;
 
 // ELF32 header structure
 typedef struct {
@@ -110,63 +97,209 @@ static int get_register_code(const char *name, size_t len) {
     return -1;
 }
 
-// Trim whitespace from left
+// Trim whitespace
 static const char *trim_left(const char *s) {
     while (*s == ' ' || *s == '\t') s++;
     return s;
 }
 
-// Parse a single line of assembly
-static size_t assemble_line(const char *line, size_t line_len, uint8_t *output, size_t output_max) {
-    const char *p = trim_left(line);
-    size_t remaining = line_len - (p - line);
+static const char *trim_right(const char *s, const char *end) {
+    while (end > s && (*(end-1) == ' ' || *(end-1) == '\t')) end--;
+    return end;
+}
+
+// Parse operand (register or immediate)
+static int parse_operand(const char *op_str, size_t op_len, Operand *op) {
+    op_str = trim_left(op_str);
+    const char *op_end = op_str + op_len;
+    op_end = trim_right(op_str, op_end);
+    op_len = op_end - op_str;
     
-    // Skip empty lines and comments
-    if (remaining == 0 || *p == '\0' || *p == ';' || *p == '#') {
+    if (op_len == 0) {
+        op->type = OP_NONE;
         return 0;
     }
     
-    // Find mnemonic
-    const char *mnem_start = p;
-    while (p < line + line_len && *p != ' ' && *p != '\t' && *p != '\n') p++;
-    size_t mnem_len = p - mnem_start;
-    
-    // Find instruction
-    Instruction *instr = NULL;
-    for (int i = 0; instructions[i].mnemonic; i++) {
-        const char *m = instructions[i].mnemonic;
-        size_t mlen = 0;
-        while (m[mlen]) mlen++;
-        if (mnem_len == mlen && strncmp(mnem_start, m, mlen) == 0) {
-            instr = &instructions[i];
-            break;
-        }
-    }
-    
-    if (!instr) {
-        // Unknown instruction, skip it (or output NOP)
-        if (output_max > 0) {
-            output[0] = 0x90; // NOP
+    // Check if register
+    if (op_str[0] == '%') {
+        int reg_code = get_register_code(op_str + 1, op_len - 1);
+        if (reg_code >= 0) {
+            op->type = OP_REG;
+            op->reg = reg_code;
             return 1;
         }
-        return 0;
     }
     
-    // For now, simple encoding: just output the opcode + NOPs for padding
-    if (output_max > 0) {
-        output[0] = instr->opcode;
-        // Add ModR/M byte for 2-operand instructions
-        if (instr->args == 2 && output_max > 1) {
-            output[1] = 0xC0; // ModR/M: register to register
-            return 2;
-        } else if (instr->args == 1 && output_max > 1) {
-            output[1] = 0x00; // Simple operand byte
-            return 2;
+    // Check if immediate (starts with $)
+    if (op_str[0] == '$') {
+        op->type = OP_IMM;
+        op->value = 0;
+        for (const char *p = op_str + 1; p < op_end; p++) {
+            if (*p >= '0' && *p <= '9') {
+                op->value = op->value * 10 + (*p - '0');
+            }
         }
         return 1;
     }
     
+    // Check if memory reference like (%ebp) or 4(%ebp)
+    if (op_str[0] == '(') {
+        // Parse register inside parentheses
+        int paren_end = 0;
+        while (paren_end < (int)op_len && op_str[paren_end] != ')') paren_end++;
+        int reg_code = get_register_code(op_str + 1, paren_end - 1);
+        if (reg_code >= 0) {
+            op->type = OP_MEM;
+            op->reg = reg_code;
+            op->value = 0;
+            return 1;
+        }
+    } else if (op_len > 1 && op_str[op_len-1] == ')') {
+        // Parse offset(%register)
+        int paren_pos = 0;
+        while (paren_pos < (int)op_len && op_str[paren_pos] != '(') paren_pos++;
+        if (paren_pos < (int)op_len) {
+            // Parse offset
+            op->value = 0;
+            int neg = 0;
+            const char *num_start = op_str;
+            if (op_str[0] == '-') {
+                neg = 1;
+                num_start++;
+            }
+            for (const char *p = num_start; p < op_str + paren_pos; p++) {
+                if (*p >= '0' && *p <= '9') {
+                    op->value = op->value * 10 + (*p - '0');
+                }
+            }
+            if (neg) op->value = -op->value;
+            
+            // Parse register
+            int reg_code = get_register_code(op_str + paren_pos + 1, op_len - paren_pos - 2);
+            if (reg_code >= 0) {
+                op->type = OP_MEM;
+                op->reg = reg_code;
+                return 1;
+            }
+        }
+    }
+    
     return 0;
+}
+
+// Encode x86 instruction
+static size_t encode_instruction(const char *mnem, size_t mnem_len, 
+                                 Operand *op1, Operand *op2,
+                                 uint8_t *output, size_t output_max) {
+    if (output_max == 0) return 0;
+    
+    size_t bytes = 0;
+    
+    // NOP
+    if (mnem_len == 3 && strncmp(mnem, "nop", 3) == 0) {
+        output[bytes++] = 0x90;
+        return bytes;
+    }
+    
+    // RET
+    if (mnem_len == 3 && strncmp(mnem, "ret", 3) == 0) {
+        output[bytes++] = 0xC3;
+        return bytes;
+    }
+    
+    // PUSH reg  (0x50 + reg)
+    if (mnem_len == 4 && strncmp(mnem, "push", 4) == 0) {
+        if (op1->type == OP_REG) {
+            output[bytes++] = 0x50 + op1->reg;
+            return bytes;
+        }
+        // PUSH imm32: 0x68
+        if (op1->type == OP_IMM && bytes + 5 <= output_max) {
+            output[bytes++] = 0x68;
+            output[bytes++] = op1->value & 0xFF;
+            output[bytes++] = (op1->value >> 8) & 0xFF;
+            output[bytes++] = (op1->value >> 16) & 0xFF;
+            output[bytes++] = (op1->value >> 24) & 0xFF;
+            return bytes;
+        }
+    }
+    
+    // POP reg  (0x58 + reg)
+    if (mnem_len == 3 && strncmp(mnem, "pop", 3) == 0) {
+        if (op1->type == OP_REG) {
+            output[bytes++] = 0x58 + op1->reg;
+            return bytes;
+        }
+    }
+    
+    // MOV instructions
+    if (mnem_len == 3 && strncmp(mnem, "mov", 3) == 0) {
+        if (bytes + 2 > output_max) return 0;
+        
+        // mov reg32, reg32 (0x89 /r)
+        if (op1->type == OP_REG && op2->type == OP_REG) {
+            output[bytes++] = 0x89;
+            output[bytes++] = 0xC0 | (op2->reg << 3) | op1->reg;
+            return bytes;
+        }
+        
+        // mov imm32, reg32 (0xB8 + reg)
+        if (op1->type == OP_IMM && op2->type == OP_REG && bytes + 5 <= output_max) {
+            output[bytes++] = 0xB8 + op2->reg;
+            output[bytes++] = op1->value & 0xFF;
+            output[bytes++] = (op1->value >> 8) & 0xFF;
+            output[bytes++] = (op1->value >> 16) & 0xFF;
+            output[bytes++] = (op1->value >> 24) & 0xFF;
+            return bytes;
+        }
+        
+        // mov [reg], reg32 (0x8B /r)
+        if (op1->type == OP_MEM && op2->type == OP_REG && bytes + 2 <= output_max) {
+            output[bytes++] = 0x8B;
+            output[bytes++] = 0x00 | (op2->reg << 3) | op1->reg;
+            return bytes;
+        }
+        
+        // mov reg32, [reg] (0x89 /r)
+        if (op1->type == OP_REG && op2->type == OP_MEM && bytes + 2 <= output_max) {
+            output[bytes++] = 0x89;
+            output[bytes++] = 0x00 | (op1->reg << 3) | op2->reg;
+            return bytes;
+        }
+    }
+    
+    // SUB imm32, reg32  (0x83 0xEC imm8)
+    if (mnem_len == 3 && strncmp(mnem, "sub", 3) == 0) {
+        if (op1->type == OP_IMM && op2->type == OP_REG && bytes + 3 <= output_max) {
+            output[bytes++] = 0x83;
+            output[bytes++] = 0xE8 | op2->reg;  // 0xEC for esp
+            output[bytes++] = op1->value & 0xFF;
+            return bytes;
+        }
+    }
+    
+    // ADD instructions
+    if (mnem_len == 3 && strncmp(mnem, "add", 3) == 0) {
+        // add reg, reg
+        if (op1->type == OP_REG && op2->type == OP_REG && bytes + 2 <= output_max) {
+            output[bytes++] = 0x01;
+            output[bytes++] = 0xC0 | (op2->reg << 3) | op1->reg;
+            return bytes;
+        }
+    }
+    
+    // INT imm8 (0xCD imm)
+    if (mnem_len == 3 && strncmp(mnem, "int", 3) == 0) {
+        if (op1->type == OP_IMM && bytes + 2 <= output_max) {
+            output[bytes++] = 0xCD;
+            output[bytes++] = op1->value & 0xFF;
+            return bytes;
+        }
+    }
+    
+    // Default: encode as NOP to prevent errors
+    output[bytes++] = 0x90;
+    return bytes;
 }
 
 // Generate minimal ELF32 executable
@@ -271,8 +404,45 @@ int assemble_x86(const char *asm_text, size_t asm_len,
         }
         
         size_t line_len = line_end - line_start;
-        size_t bytes = assemble_line(line_start, line_len, code_start + code_size, code_space - code_size);
-        code_size += bytes;
+        const char *p = trim_left(line_start);
+        size_t remaining = line_len - (p - line_start);
+        
+        // Skip empty lines and comments
+        if (remaining > 0 && *p != '\0' && *p != ';' && *p != '#') {
+            // Find mnemonic
+            const char *mnem_start = p;
+            while (p < line_end && *p != ' ' && *p != '\t' && *p != '\n') p++;
+            size_t mnem_len = p - mnem_start;
+            
+            // Parse operands
+            Operand op1 = {OP_NONE}, op2 = {OP_NONE};
+            
+            // Find operands separated by comma
+            if (p < line_end && *p != '\n') {
+                const char *op_start = p;
+                int comma_pos = -1;
+                for (const char *q = op_start; q < line_end && *q != '\n'; q++) {
+                    if (*q == ',') {
+                        comma_pos = q - op_start;
+                        break;
+                    }
+                }
+                
+                if (comma_pos > 0) {
+                    // Two operands
+                    parse_operand(op_start, comma_pos, &op1);
+                    parse_operand(op_start + comma_pos + 1, (line_end - op_start) - comma_pos - 1, &op2);
+                } else {
+                    // One operand
+                    parse_operand(op_start, line_end - op_start, &op1);
+                }
+            }
+            
+            // Encode instruction
+            size_t bytes = encode_instruction(mnem_start, mnem_len, &op1, &op2, 
+                                             code_start + code_size, code_space - code_size);
+            code_size += bytes;
+        }
         
         line_start = line_end + 1;
     }
