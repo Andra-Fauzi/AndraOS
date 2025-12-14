@@ -384,3 +384,29 @@ static MemStream stderr_stream_obj = {
     .pos = 0
 };
 MemStream *stderr = &stderr_stream_obj;
+
+// tolower removed (duplicate)
+// toupper removed (duplicate)
+
+int isupper(int c) {
+    return c >= 'A' && c <= 'Z';
+}
+
+// strncasecmp removed (duplicate)
+
+int strcasecmp(const char *s1, const char *s2) {
+    while (*s1) {
+        int c1 = tolower((unsigned char)*s1++);
+        int c2 = tolower((unsigned char)*s2++);
+        if (c1 != c2) return c1 - c2;
+    }
+    return tolower((unsigned char)*s1) - tolower((unsigned char)*s2);
+}
+
+// strtoul removed (duplicate)
+
+long strtol(const char *nptr, char **endptr, int base) {
+    return (long)strtoul(nptr, endptr, base);
+}
+
+// strtold removed (duplicate)

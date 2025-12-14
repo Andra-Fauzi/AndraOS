@@ -15,6 +15,7 @@
 #include "elf.h"
 #include "tools_command/cat.h"
 #include "tools_command/create_file.h"
+#include "tools_command/as.h"
 
 typedef struct {
 	char name[255];

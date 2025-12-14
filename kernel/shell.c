@@ -31,6 +31,7 @@ void init_shell(multiboot_info_t *mb_info) {
 	add_args("compile", c_compile, 7);
 	add_args("cat", c_cat, 3);
 	add_args("createfile", c_create_file, 10);
+	add_args("as", c_as, 2);
 }
 
 char shell_getchar() {

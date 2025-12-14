@@ -4,7 +4,7 @@
 extern multiboot_info_t *multiboot_info;
 
 void syscall_handler(struct regs *r) {
-	kprint("syscall called", multiboot_info);
+	// kprint("syscall called", multiboot_info);
     uint32_t syscall_number = r->eax;
 
     switch (syscall_number) {

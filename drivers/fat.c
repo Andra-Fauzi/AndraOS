@@ -820,8 +820,12 @@ void writefile(uint16_t parent_cluster, const char *name, void *buffer, uint32_t
         for (int s = 0; s < boot_record.sector_per_cluster; s++) {
             memset(sector_buf, 0, 512);
             uint32_t copy_size = (remaining_size < 512) ? remaining_size : 512;
-            if (remaining_size > 0) {
+	    //uint32_t copy_size = 512;
+	    if (remaining_size > 0) {
                 memcpy(sector_buf, buf_ptr, copy_size);
+		// kprint("sector buffer : ", multiboot_info);
+		// kprint(sector_buf, multiboot_info);
+		// kprint("\n", multiboot_info);
                 buf_ptr += copy_size;
                 remaining_size -= copy_size;
             }

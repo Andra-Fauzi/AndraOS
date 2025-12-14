@@ -105,7 +105,7 @@ void c_compile(char* buffer, int length, multiboot_info_t *mb_info) {
     kprint("Compiling...\n", mb_info);
     
     // 3. Compile
-    int ret = subc_compile(src_buffer, src_len, dest_buffer, 256 * 1024, &dest_len);
+    int ret = subc_compile(src_buffer, src_len, dest_buffer, 64 * 1024, &dest_len);
     
     if (ret == 0) {
         kprint("Compilation successful! Size: ", mb_info);

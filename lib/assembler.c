@@ -1,47 +1,51 @@
 #include "assembler.h"
 #include "util.h"
+#include <stdint.h>
+#include <stdbool.h>
 
-// x86-32 register encoding and names
-typedef struct {
-    char *name;
-    uint8_t code;
-} Register;
+// -----------------------------------------------------------------------------
+// Data Structures
+// -----------------------------------------------------------------------------
 
-static Register registers[] = {
-    {"eax", 0},
-    {"ecx", 1},
-    {"edx", 2},
-    {"ebx", 3},
-    {"esp", 4},
-    {"ebp", 5},
-    {"esi", 6},
-    {"edi", 7},
-    {NULL, 0}
-};
-
-// Operand types
-typedef enum {
-    OP_NONE,
-    OP_REG,      // register
-    OP_IMM,      // immediate value
-    OP_MEM,      // memory [reg + offset]
-} OperandType;
+#define MAX_LABELS 512
 
 typedef struct {
-    OperandType type;
-    int reg;     // register code (0-7)
-    int value;   // immediate or offset
-} Operand;
+    char name[64];
+    uint32_t address;
+    bool defined;
+} AsmLabel;
 
-// Instruction encoding helper
-typedef struct {
-    uint8_t opcode;
-    uint8_t modrm_byte;  // Combined encoding
-    int has_immediate;
-    int immediate;
-} EncodedInst;
+static AsmLabel labels[MAX_LABELS];
+static int label_count = 0;
 
-// ELF32 header structure
+
+static void reset_labels() {
+    label_count = 0;
+}
+
+static AsmLabel *find_label(const char *name) {
+    for (int i = 0; i < label_count; i++) {
+        if (strcmp(labels[i].name, name) == 0) {
+            return &labels[i];
+        }
+    }
+    return NULL;
+}
+
+static AsmLabel *add_label(const char *name) {
+    AsmLabel *l = find_label(name);
+    if (l) return l;
+    if (label_count >= MAX_LABELS) return NULL;
+    l = &labels[label_count++];
+
+    strncpy(l->name, name, 63);
+    l->name[63] = '\0';
+    l->defined = false;
+    l->address = 0;
+    return l;
+}
+
+// ELF Structures
 typedef struct {
     uint8_t e_ident[16];
     uint16_t e_type;
@@ -59,7 +63,6 @@ typedef struct {
     uint16_t e_shstrndx;
 } ELF32_Header;
 
-// Program header
 typedef struct {
     uint32_t p_type;
     uint32_t p_offset;
@@ -71,391 +74,485 @@ typedef struct {
     uint32_t p_align;
 } ELF32_ProgramHeader;
 
-// Simple helper to write little-endian integers
-static void write_u32_le(uint8_t *buf, uint32_t val) {
-    buf[0] = val & 0xFF;
-    buf[1] = (val >> 8) & 0xFF;
-    buf[2] = (val >> 16) & 0xFF;
-    buf[3] = (val >> 24) & 0xFF;
-}
+// x86 Registers
+typedef struct {
+    const char *name;
+    uint8_t code;
+    uint8_t size; // 1=8bit, 2=16bit, 4=32bit
+} Register;
 
-static void write_u16_le(uint8_t *buf, uint16_t val) {
-    buf[0] = val & 0xFF;
-    buf[1] = (val >> 8) & 0xFF;
-}
+static Register registers[] = {
+    {"al", 0, 1}, {"cl", 1, 1}, {"dl", 2, 1}, {"bl", 3, 1},
+    {"ah", 4, 1}, {"ch", 5, 1}, {"dh", 6, 1}, {"bh", 7, 1},
+    {"ax", 0, 2}, {"cx", 1, 2}, {"dx", 2, 2}, {"bx", 3, 2},
+    {"sp", 4, 2}, {"bp", 5, 2}, {"si", 6, 2}, {"di", 7, 2},
+    {"eax", 0, 4}, {"ecx", 1, 4}, {"edx", 2, 4}, {"ebx", 3, 4},
+    {"esp", 4, 4}, {"ebp", 5, 4}, {"esi", 6, 4}, {"edi", 7, 4},
+    {"dil", 7, 1}, {"sil", 6, 1}, {"bpl", 5, 1}, {"spl", 4, 1},
+    {"xmm0", 0, 16}, {"xmm1", 1, 16}, {"xmm2", 2, 16}, {"xmm3", 3, 16},
+    {"xmm4", 4, 16}, {"xmm5", 5, 16}, {"xmm6", 6, 16}, {"xmm7", 7, 16},
+    {"st(0)", 0, 10},
+    {NULL, 0, 0}
+};
 
-// Get register code from name
-static int get_register_code(const char *name, size_t len) {
+static int get_register(const char *name, int *code, int *size) {
     for (int i = 0; registers[i].name; i++) {
-        const char *r = registers[i].name;
-        size_t rlen = 0;
-        while (r[rlen]) rlen++;
-        if (len == rlen && strncmp(name, r, len) == 0) {
-            return registers[i].code;
+        if (strcasecmp(registers[i].name, name) == 0) {
+            if (code) *code = registers[i].code;
+            if (size) *size = registers[i].size;
+            return 1;
         }
     }
-    return -1;
+    return 0;
 }
 
-// Trim whitespace
-static const char *trim_left(const char *s) {
-    while (*s == ' ' || *s == '\t') s++;
-    return s;
+// Operand Parsing
+typedef enum {
+    OP_NONE,
+    OP_REG,
+    OP_IMM,
+    OP_MEM,
+    OP_LABEL
+} OperandType;
+
+typedef struct {
+    OperandType type;
+    int reg;
+    int reg_size;
+    int32_t offset;
+    int base_reg;
+    char label_name[64];
+} Operand;
+
+// -----------------------------------------------------------------------------
+// Parsing Helpers
+// -----------------------------------------------------------------------------
+
+static const char *skip_whitespace(const char *p) {
+    while (*p && (*p == ' ' || *p == '\t')) p++;
+    return p;
 }
 
-static const char *trim_right(const char *s, const char *end) {
-    while (end > s && (*(end-1) == ' ' || *(end-1) == '\t')) end--;
-    return end;
-}
-
-// Parse operand (register or immediate)
-static int parse_operand(const char *op_str, size_t op_len, Operand *op) {
-    op_str = trim_left(op_str);
-    const char *op_end = op_str + op_len;
-    op_end = trim_right(op_str, op_end);
-    op_len = op_end - op_str;
+static const char *parse_token(const char *p, char *buf, int max_len) {
+    p = skip_whitespace(p);
+    if (!*p) return NULL;
     
-    if (op_len == 0) {
-        op->type = OP_NONE;
-        return 0;
+    int i = 0;
+    while (*p && !isspace(*p) && *p != ',' && *p != '\n' && *p != ':') {
+        if (i < max_len - 1) buf[i++] = *p;
+        p++;
     }
+    buf[i] = '\0';
+    return p;
+}
+
+static int parse_operand_str(const char *text, Operand *op) {
+    char buf[128];
+    const char *p = text;
+    memset(op, 0, sizeof(Operand));
+    op->type = OP_NONE;
+    op->base_reg = -1;
     
-    // Check if register
-    if (op_str[0] == '%') {
-        int reg_code = get_register_code(op_str + 1, op_len - 1);
-        if (reg_code >= 0) {
-            op->type = OP_REG;
-            op->reg = reg_code;
+    p = skip_whitespace(p);
+    if (!*p) return 0;
+    
+    if (*p == '$') {
+        op->type = OP_IMM;
+        op->offset = (int32_t)strtoul(p + 1, NULL, 0);
+        return 1;
+    }
+
+    // Character literal: 'a'
+    if (*p == '\'') {
+        op->type = OP_IMM;
+        if (*(p+1) && *(p+2) == '\'') {
+            op->offset = (int32_t)*(p+1);
             return 1;
         }
     }
     
-    // Check if immediate (starts with $)
-    if (op_str[0] == '$') {
-        op->type = OP_IMM;
-        op->value = 0;
-        for (const char *p = op_str + 1; p < op_end; p++) {
-            if (*p >= '0' && *p <= '9') {
-                op->value = op->value * 10 + (*p - '0');
+    // Check for register
+    if (*p == '%') {
+        const char *end = p + 1;
+        while (isalnum(*end) || *end == '(' || *end == ')') end++; // xmm0, st(0)
+        int len = end - (p + 1);
+        strncpy(buf, p + 1, len);
+        buf[len] = '\0';
+        if (get_register(buf, &op->reg, &op->reg_size)) {
+            op->type = OP_REG;
+            return 1;
+        }
+        return 0;
+    }
+    
+    // Memory: disp(%reg), (%reg), disp, label
+    const char *lparen = strchr(p, '(');
+    if (lparen) {
+        op->type = OP_MEM;
+        if (lparen > p) {
+            strncpy(buf, p, lparen - p);
+            buf[lparen-p] = '\0';
+            if (isdigit(buf[0]) || buf[0] == '-') {
+                op->offset = (int32_t)strtol(buf, NULL, 0);
+            } else {
+                strncpy(op->label_name, buf, 63);
             }
+        }
+        const char *rstart = lparen + 1;
+        if (*rstart == '%') {
+             const char *rend = rstart + 1;
+             while (isalnum(*rend)) rend++;
+             char regname[16];
+             int rlen = rend - (rstart + 1);
+             strncpy(regname, rstart + 1, rlen);
+             regname[rlen] = '\0';
+             int dummy;
+             if (!get_register(regname, &op->base_reg, &dummy)) return 0;
         }
         return 1;
     }
     
-    // Check if memory reference like (%ebp) or 4(%ebp)
-    if (op_str[0] == '(') {
-        // Parse register inside parentheses
-        int paren_end = 0;
-        while (paren_end < (int)op_len && op_str[paren_end] != ')') paren_end++;
-        int reg_code = get_register_code(op_str + 1, paren_end - 1);
-        if (reg_code >= 0) {
-            op->type = OP_MEM;
-            op->reg = reg_code;
-            op->value = 0;
-            return 1;
-        }
-    } else if (op_len > 1 && op_str[op_len-1] == ')') {
-        // Parse offset(%register)
-        int paren_pos = 0;
-        while (paren_pos < (int)op_len && op_str[paren_pos] != '(') paren_pos++;
-        if (paren_pos < (int)op_len) {
-            // Parse offset
-            op->value = 0;
-            int neg = 0;
-            const char *num_start = op_str;
-            if (op_str[0] == '-') {
-                neg = 1;
-                num_start++;
-            }
-            for (const char *p = num_start; p < op_str + paren_pos; p++) {
-                if (*p >= '0' && *p <= '9') {
-                    op->value = op->value * 10 + (*p - '0');
-                }
-            }
-            if (neg) op->value = -op->value;
-            
-            // Parse register
-            int reg_code = get_register_code(op_str + paren_pos + 1, op_len - paren_pos - 2);
-            if (reg_code >= 0) {
-                op->type = OP_MEM;
-                op->reg = reg_code;
-                return 1;
-            }
-        }
+    if (isalpha(*p) || *p == '_' || *p == '.') {
+        const char *end = p;
+        while (isalnum(*end) || *end == '_' || *end == '.') end++;
+        int len = end - p;
+        strncpy(op->label_name, p, len);
+        op->label_name[len] = '\0';
+        op->type = OP_LABEL;
+        return 1;
+    }
+
+    // Bare number - treat as immediate for convenience (e.g. mov 1, %eax)
+    if (isdigit(*p) || (*p == '-' && isdigit(*(p+1)))) {
+        op->type = OP_IMM;
+        op->offset = (int32_t)strtoul(p, NULL, 0);
+        return 1;
     }
     
     return 0;
 }
 
-// Encode x86 instruction
-static size_t encode_instruction(const char *mnem, size_t mnem_len, 
-                                 Operand *op1, Operand *op2,
-                                 uint8_t *output, size_t output_max) {
-    if (output_max == 0) return 0;
-    
-    size_t bytes = 0;
-    
-    // NOP
-    if (mnem_len == 3 && strncmp(mnem, "nop", 3) == 0) {
-        output[bytes++] = 0x90;
-        return bytes;
-    }
-    
-    // RET
-    if (mnem_len == 3 && strncmp(mnem, "ret", 3) == 0) {
-        output[bytes++] = 0xC3;
-        return bytes;
-    }
-    
-    // PUSH reg  (0x50 + reg)
-    if (mnem_len == 4 && strncmp(mnem, "push", 4) == 0) {
-        if (op1->type == OP_REG) {
-            output[bytes++] = 0x50 + op1->reg;
-            return bytes;
-        }
-        // PUSH imm32: 0x68
-        if (op1->type == OP_IMM && bytes + 5 <= output_max) {
-            output[bytes++] = 0x68;
-            output[bytes++] = op1->value & 0xFF;
-            output[bytes++] = (op1->value >> 8) & 0xFF;
-            output[bytes++] = (op1->value >> 16) & 0xFF;
-            output[bytes++] = (op1->value >> 24) & 0xFF;
-            return bytes;
-        }
-    }
-    
-    // POP reg  (0x58 + reg)
-    if (mnem_len == 3 && strncmp(mnem, "pop", 3) == 0) {
-        if (op1->type == OP_REG) {
-            output[bytes++] = 0x58 + op1->reg;
-            return bytes;
-        }
-    }
-    
-    // MOV instructions
-    if (mnem_len == 3 && strncmp(mnem, "mov", 3) == 0) {
-        if (bytes + 2 > output_max) return 0;
-        
-        // mov reg32, reg32 (0x89 /r)
-        if (op1->type == OP_REG && op2->type == OP_REG) {
-            output[bytes++] = 0x89;
-            output[bytes++] = 0xC0 | (op2->reg << 3) | op1->reg;
-            return bytes;
-        }
-        
-        // mov imm32, reg32 (0xB8 + reg)
-        if (op1->type == OP_IMM && op2->type == OP_REG && bytes + 5 <= output_max) {
-            output[bytes++] = 0xB8 + op2->reg;
-            output[bytes++] = op1->value & 0xFF;
-            output[bytes++] = (op1->value >> 8) & 0xFF;
-            output[bytes++] = (op1->value >> 16) & 0xFF;
-            output[bytes++] = (op1->value >> 24) & 0xFF;
-            return bytes;
-        }
-        
-        // mov [reg], reg32 (0x8B /r)
-        if (op1->type == OP_MEM && op2->type == OP_REG && bytes + 2 <= output_max) {
-            output[bytes++] = 0x8B;
-            output[bytes++] = 0x00 | (op2->reg << 3) | op1->reg;
-            return bytes;
-        }
-        
-        // mov reg32, [reg] (0x89 /r)
-        if (op1->type == OP_REG && op2->type == OP_MEM && bytes + 2 <= output_max) {
-            output[bytes++] = 0x89;
-            output[bytes++] = 0x00 | (op1->reg << 3) | op2->reg;
-            return bytes;
-        }
-    }
-    
-    // SUB imm32, reg32  (0x83 0xEC imm8)
-    if (mnem_len == 3 && strncmp(mnem, "sub", 3) == 0) {
-        if (op1->type == OP_IMM && op2->type == OP_REG && bytes + 3 <= output_max) {
-            output[bytes++] = 0x83;
-            output[bytes++] = 0xE8 | op2->reg;  // 0xEC for esp
-            output[bytes++] = op1->value & 0xFF;
-            return bytes;
-        }
-    }
-    
-    // ADD instructions
-    if (mnem_len == 3 && strncmp(mnem, "add", 3) == 0) {
-        // add reg, reg
-        if (op1->type == OP_REG && op2->type == OP_REG && bytes + 2 <= output_max) {
-            output[bytes++] = 0x01;
-            output[bytes++] = 0xC0 | (op2->reg << 3) | op1->reg;
-            return bytes;
-        }
-    }
-    
-    // INT imm8 (0xCD imm)
-    if (mnem_len == 3 && strncmp(mnem, "int", 3) == 0) {
-        if (op1->type == OP_IMM && bytes + 2 <= output_max) {
-            output[bytes++] = 0xCD;
-            output[bytes++] = op1->value & 0xFF;
-            return bytes;
-        }
-    }
-    
-    // Default: encode as NOP to prevent errors
-    output[bytes++] = 0x90;
-    return bytes;
+// -----------------------------------------------------------------------------
+// Encoding Helpers
+// -----------------------------------------------------------------------------
+
+static void emit_u8(uint8_t **buf, uint8_t val) {
+    if (*buf) *(*buf)++ = val;
 }
 
-// Generate minimal ELF32 executable
-static void generate_elf_header(uint8_t *buf, uint32_t code_size) {
-    ELF32_Header header;
-    
-    // ELF magic number
-    header.e_ident[0] = 0x7F;
-    header.e_ident[1] = 'E';
-    header.e_ident[2] = 'L';
-    header.e_ident[3] = 'F';
-    header.e_ident[4] = 1;  // 32-bit
-    header.e_ident[5] = 1;  // Little-endian
-    header.e_ident[6] = 1;  // Current version
-    header.e_ident[7] = 0;  // UNIX System V ABI
-    header.e_ident[8] = 0;
-    for (int i = 9; i < 16; i++) {
-        header.e_ident[i] = 0;
-    }
-    
-    header.e_type = 2;           // ET_EXEC
-    header.e_machine = 3;        // EM_386
-    header.e_version = 1;
-    header.e_entry = 0x08048000; // Entry point
-    header.e_phoff = 52;         // Program header offset
-    header.e_shoff = 0;          // Section header offset (not used)
-    header.e_flags = 0;
-    header.e_ehsize = 52;        // ELF header size
-    header.e_phentsize = 32;     // Program header size
-    header.e_phnum = 1;          // Number of program headers
-    header.e_shentsize = 0;
-    header.e_shnum = 0;
-    header.e_shstrndx = 0;
-    
-    // Write ELF header
-    memcpy(buf, header.e_ident, 16);
-    write_u16_le(buf + 16, header.e_type);
-    write_u16_le(buf + 18, header.e_machine);
-    write_u32_le(buf + 20, header.e_version);
-    write_u32_le(buf + 24, header.e_entry);
-    write_u32_le(buf + 28, header.e_phoff);
-    write_u32_le(buf + 32, header.e_shoff);
-    write_u32_le(buf + 36, header.e_flags);
-    write_u16_le(buf + 40, header.e_ehsize);
-    write_u16_le(buf + 42, header.e_phentsize);
-    write_u16_le(buf + 44, header.e_phnum);
-    write_u16_le(buf + 46, header.e_shentsize);
-    write_u16_le(buf + 48, header.e_shnum);
-    write_u16_le(buf + 50, header.e_shstrndx);
-    
-    // Generate program header at offset 52
-    uint8_t *phdr = buf + 52;
-    uint32_t p_type = 1;     // PT_LOAD
-    uint32_t p_offset = 84;  // After ELF + program header
-    uint32_t p_vaddr = 0x08048000;
-    uint32_t p_paddr = 0x08048000;
-    uint32_t p_filesz = 84 + code_size;
-    uint32_t p_memsz = 84 + code_size;
-    uint32_t p_flags = 5;    // PF_R | PF_X (read + execute)
-    uint32_t p_align = 0x1000;
-    
-    write_u32_le(phdr + 0, p_type);
-    write_u32_le(phdr + 4, p_offset);
-    write_u32_le(phdr + 8, p_vaddr);
-    write_u32_le(phdr + 12, p_paddr);
-    write_u32_le(phdr + 16, p_filesz);
-    write_u32_le(phdr + 20, p_memsz);
-    write_u32_le(phdr + 24, p_flags);
-    write_u32_le(phdr + 28, p_align);
+static void emit_u32(uint8_t **buf, uint32_t val) {
+    emit_u8(buf, val & 0xFF);
+    emit_u8(buf, (val >> 8) & 0xFF);
+    emit_u8(buf, (val >> 16) & 0xFF);
+    emit_u8(buf, (val >> 24) & 0xFF);
 }
 
-// Main assembly function
-int assemble_x86(const char *asm_text, size_t asm_len, 
-                 char *output, size_t output_max, size_t *output_len) {
-    if (!asm_text || !output || output_max < 100) {
-        if (output_len) *output_len = 0;
-        return 1;
+static void emit_modrm(uint8_t **buf, int mod, int reg, int rm) {
+    emit_u8(buf, (mod << 6) | ((reg & 7) << 3) | (rm & 7));
+}
+
+// Emits Insn + ModRM.
+// Opcode can be 1 or 2 bytes. If opcode > 0xFF, assumes 2 bytes (big endian format in int? e.g. 0x0F85).
+static void emit_insn_modrm(uint8_t **buf, int opcode, Operand *op_reg, Operand *op_mem) {
+    int mod = 0, rm = 0;
+    int32_t disp = op_mem->offset;
+    
+    if (opcode > 0xFF) {
+        emit_u8(buf, (opcode >> 8) & 0xFF);
+        emit_u8(buf, opcode & 0xFF);
+    } else {
+        emit_u8(buf, opcode);
     }
     
-    // ELF header is 84 bytes (52 byte ELF header + 32 byte program header)
-    const size_t ELF_HEADER_SIZE = 84;
-    
-    if (output_max < ELF_HEADER_SIZE + 4) {
-        if (output_len) *output_len = 0;
-        return 1;
-    }
-    
-    // Generate ELF header
-    generate_elf_header((uint8_t *)output, 4);
-    
-    // Assemble the code into the space after headers
-    uint8_t *code_start = (uint8_t *)output + ELF_HEADER_SIZE;
-    size_t code_space = output_max - ELF_HEADER_SIZE;
-    size_t code_size = 0;
-    
-    // Parse assembly line by line
-    const char *line_start = asm_text;
-    while (line_start < asm_text + asm_len && code_size < code_space) {
-        const char *line_end = line_start;
-        while (line_end < asm_text + asm_len && *line_end != '\n') {
-            line_end++;
-        }
-        
-        size_t line_len = line_end - line_start;
-        const char *p = trim_left(line_start);
-        size_t remaining = line_len - (p - line_start);
-        
-        // Skip empty lines and comments
-        if (remaining > 0 && *p != '\0' && *p != ';' && *p != '#') {
-            // Find mnemonic
-            const char *mnem_start = p;
-            while (p < line_end && *p != ' ' && *p != '\t' && *p != '\n') p++;
-            size_t mnem_len = p - mnem_start;
-            
-            // Parse operands
-            Operand op1 = {OP_NONE}, op2 = {OP_NONE};
-            
-            // Find operands separated by comma
-            if (p < line_end && *p != '\n') {
-                const char *op_start = p;
-                int comma_pos = -1;
-                for (const char *q = op_start; q < line_end && *q != '\n'; q++) {
-                    if (*q == ',') {
-                        comma_pos = q - op_start;
-                        break;
-                    }
-                }
-                
-                if (comma_pos > 0) {
-                    // Two operands
-                    parse_operand(op_start, comma_pos, &op1);
-                    parse_operand(op_start + comma_pos + 1, (line_end - op_start) - comma_pos - 1, &op2);
-                } else {
-                    // One operand
-                    parse_operand(op_start, line_end - op_start, &op1);
-                }
+    if (op_mem->type == OP_REG) {
+        mod = 3;
+        rm = op_mem->reg;
+    } else if (op_mem->type == OP_MEM) {
+        if (op_mem->base_reg == -1) {
+            mod = 0; rm = 5; 
+        } else {
+            rm = op_mem->base_reg;
+             if (disp == 0 && rm != 5) {
+                mod = 0;
+            } else if (disp >= -128 && disp <= 127) {
+                mod = 1;
+            } else {
+                mod = 2;
             }
-            
-            // Encode instruction
-            size_t bytes = encode_instruction(mnem_start, mnem_len, &op1, &op2, 
-                                             code_start + code_size, code_space - code_size);
-            code_size += bytes;
         }
+    }
+    
+    int reg_field = (op_reg) ? op_reg->reg : 0; // If op_reg is NULL, reg field is 0 (or use specific extended opcode logic)
+    
+    emit_modrm(buf, mod, reg_field, rm);
+    
+    if (mod == 1) emit_u8(buf, (int8_t)disp);
+    else if (mod == 2 || (mod == 0 && rm == 5)) emit_u32(buf, disp);
+}
+
+// -----------------------------------------------------------------------------
+// Assembler Logic
+// -----------------------------------------------------------------------------
+
+int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, int pass) {
+    char mnemonic[32];
+    const char *p = parse_token(line, mnemonic, 32);
+    if (!p) return 0;
+    
+    if (*p == ':') {
+        if (pass == 1) {
+            AsmLabel *l = add_label(mnemonic);
+            if (l) {
+                l->address = current_addr;
+                l->defined = true;
+            }
+        }
+        return 0;
+    }
+    
+    Operand op1 = {0}, op2 = {0};
+    int op_count = 0;
+    
+    p = skip_whitespace(p);
+    if (*p) {
+        const char *comma = strchr(p, ',');
+        if (comma) {
+            char s1[64];
+            int len1 = comma - p;
+            strncpy(s1, p, len1); s1[len1] = '\0';
+            parse_operand_str(s1, &op1);
+            parse_operand_str(comma + 1, &op2);
+            op_count = 2;
+        } else {
+            parse_operand_str(p, &op1);
+            op_count = 1;
+        }
+    }
+    
+    uint8_t *start_buf = buf ? *buf : NULL;
+    
+    if (strcasecmp(mnemonic, "nop") == 0) emit_u8(buf, 0x90);
+    else if (strcasecmp(mnemonic, "ret") == 0) emit_u8(buf, 0xC3);
+    else if (strcasecmp(mnemonic, "leave") == 0) emit_u8(buf, 0xC9);
+    else if (strcasecmp(mnemonic, "int") == 0) { // e.g., int 0x80
+        emit_u8(buf, 0xCD); 
+        emit_u8(buf, (uint8_t)op1.offset);
+    }
+    else if (strcasecmp(mnemonic, "push") == 0) {
+        if (op1.type == OP_REG) emit_u8(buf, 0x50 + op1.reg);
+        else if (op1.type == OP_IMM) { emit_u8(buf, 0x68); emit_u32(buf, op1.offset); }
+        else { 
+            // push r/m
+            Operand reg_op = {0}; reg_op.reg = 6; // /6
+            emit_insn_modrm(buf, 0xFF, &reg_op, &op1);
+        }
+    } else if (strcasecmp(mnemonic, "pop") == 0) {
+        if (op1.type == OP_REG) emit_u8(buf, 0x58 + op1.reg);
+    } else if (strcasecmp(mnemonic, "dec") == 0) {
+        if (op1.type == OP_REG) emit_u8(buf, 0x48 + op1.reg);
+        // dec r/m? opcode FF /1
+    } else if (strcasecmp(mnemonic, "inc") == 0) {
+        if (op1.type == OP_REG) emit_u8(buf, 0x40 + op1.reg);
+        // inc r/m? opcode FF /0
+    } else if (strcasecmp(mnemonic, "neg") == 0) {
+        // F7 /3
+        Operand ext = {0}; ext.reg = 3; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+    } else if (strcasecmp(mnemonic, "not") == 0) {
+        // F7 /2
+        Operand ext = {0}; ext.reg = 2; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+    } else if (strcasecmp(mnemonic, "mul") == 0) { // F7 /4 unsigned
+        Operand ext = {0}; ext.reg = 4; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+    } else if (strcasecmp(mnemonic, "div") == 0) { // F7 /6 unsigned
+        Operand ext = {0}; ext.reg = 6; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+    } else if (strcasecmp(mnemonic, "idiv") == 0) { // F7 /7 signed
+        Operand ext = {0}; ext.reg = 7; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+    } else if (strcasecmp(mnemonic, "imul") == 0) {
+        if (op_count == 2) emit_insn_modrm(buf, 0x0FAF, &op1, &op2);
+        else { /* F7 /5 loop */ Operand ext = {0}; ext.reg = 5; emit_insn_modrm(buf, 0xF7, &ext, &op1); }
+    } else if (strcasecmp(mnemonic, "add") == 0) {
+        if (op1.type == OP_IMM && op2.type == OP_REG) {
+             // 81 /0 imm32 (or 83 /0 imm8)
+             int opcode = (op1.offset >= -128 && op1.offset <= 127) ? 0x83 : 0x81;
+             Operand ext = {0}; ext.reg = 0;
+             emit_insn_modrm(buf, opcode, &ext, &op2); // op2 is destination
+             if (opcode == 0x83) emit_u8(buf, (int8_t)op1.offset); else emit_u32(buf, op1.offset);
+        } else emit_insn_modrm(buf, 0x01, &op1, &op2); // add reg, rm? No add src, dst. chibicc: add %eax, %ebx (dst=%ebx). Op 01: ADD r/m, r. src=r(op1), dst=rm(op2).
+    } else if (strcasecmp(mnemonic, "sub") == 0) {
+        if (op1.type == OP_IMM && op2.type == OP_REG) {
+             int opcode = (op1.offset >= -128 && op1.offset <= 127) ? 0x83 : 0x81;
+             Operand ext = {0}; ext.reg = 5;
+             emit_insn_modrm(buf, opcode, &ext, &op2);
+             if (opcode == 0x83) emit_u8(buf, (int8_t)op1.offset); else emit_u32(buf, op1.offset);
+        } else emit_insn_modrm(buf, 0x29, &op1, &op2); // sub reg, rm
+    } else if (strcasecmp(mnemonic, "and") == 0) {
+        if (op1.type == OP_IMM) {
+             Operand ext = {0}; ext.reg = 4;
+             emit_insn_modrm(buf, 0x81, &ext, &op2); emit_u32(buf, op1.offset);
+        } else emit_insn_modrm(buf, 0x21, &op1, &op2);
+    } else if (strcasecmp(mnemonic, "or") == 0) {
+        if (op1.type == OP_IMM) {
+             Operand ext = {0}; ext.reg = 1;
+             emit_insn_modrm(buf, 0x81, &ext, &op2); emit_u32(buf, op1.offset);
+        } else emit_insn_modrm(buf, 0x09, &op1, &op2);
+    } else if (strcasecmp(mnemonic, "xor") == 0) {
+        if (op1.type == OP_IMM) {
+             Operand ext = {0}; ext.reg = 6;
+             emit_insn_modrm(buf, 0x81, &ext, &op2); emit_u32(buf, op1.offset);
+        } else emit_insn_modrm(buf, 0x31, &op1, &op2);
+    } else if (strcasecmp(mnemonic, "shl") == 0) {
+        Operand ext = {0}; ext.reg = 4;
+        if (op1.type == OP_IMM) { emit_insn_modrm(buf, 0xC1, &ext, &op2); emit_u8(buf, op1.offset); }
+        else if (op1.type == OP_REG && op1.reg == 1) { emit_insn_modrm(buf, 0xD3, &ext, &op2); } // cl
+    } else if (strcasecmp(mnemonic, "sar") == 0) {
+        Operand ext = {0}; ext.reg = 7;
+        if (op1.type == OP_IMM) { emit_insn_modrm(buf, 0xC1, &ext, &op2); emit_u8(buf, op1.offset); }
+        else if (op1.type == OP_REG && op1.reg == 1) { emit_insn_modrm(buf, 0xD3, &ext, &op2); }
+    } else if (strcasecmp(mnemonic, "cmp") == 0) {
+        if (op1.type == OP_IMM && op2.type == OP_REG) {
+             int opcode = (op1.offset >= -128 && op1.offset <= 127) ? 0x83 : 0x81;
+             Operand ext = {0}; ext.reg = 7;
+             emit_insn_modrm(buf, opcode, &ext, &op2);
+             if (opcode == 0x83) emit_u8(buf, (int8_t)op1.offset); else emit_u32(buf, op1.offset);
+        } else emit_insn_modrm(buf, 0x39, &op1, &op2);
+    } else if (strcasecmp(mnemonic, "mov") == 0) {
+        if (op1.type == OP_REG && op2.type == OP_REG) emit_insn_modrm(buf, 0x89, &op1, &op2);
+        else if (op1.type == OP_IMM && op2.type == OP_REG) { emit_u8(buf, 0xB8 + op2.reg); emit_u32(buf, op1.offset); }
+        else if (op1.type == OP_MEM && op2.type == OP_REG) emit_insn_modrm(buf, 0x8B, &op2, &op1);
+        else if (op1.type == OP_REG && op2.type == OP_MEM) emit_insn_modrm(buf, 0x89, &op1, &op2);
+    } else if (strcasecmp(mnemonic, "lea") == 0) {
+        emit_insn_modrm(buf, 0x8D, &op2, &op1);
+    } else if (strcasecmp(mnemonic, "jmp") == 0) {
+        emit_u8(buf, 0xE9);
+        uint32_t diff = 0;
+        AsmLabel *l = find_label(op1.label_name);
+        if (pass == 2 && l) diff = l->address - (current_addr + 5);
+        emit_u32(buf, diff);
+    } else if (strcasecmp(mnemonic, "call") == 0) {
+        if (op1.type == OP_REG) { emit_u8(buf, 0xFF); emit_modrm(buf, 3, 2, op1.reg); } // call r/m
+        else {
+            emit_u8(buf, 0xE8);
+            uint32_t diff = 0;
+            AsmLabel *l = find_label(op1.label_name);
+            if (pass == 2 && l) diff = l->address - (current_addr + 5);
+            emit_u32(buf, diff);
+        }
+    } else if (strcasecmp(mnemonic, "je") == 0 || strcasecmp(mnemonic, "jz") == 0) {
+        emit_u8(buf, 0x0F); emit_u8(buf, 0x84);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name);
+        if (pass == 2 && l) diff = l->address - (current_addr + 6);
+        emit_u32(buf, diff);
+    } else if (strcasecmp(mnemonic, "jne") == 0 || strcasecmp(mnemonic, "jnz") == 0) {
+        emit_u8(buf, 0x0F); emit_u8(buf, 0x85);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name);
+        if (pass == 2 && l) diff = l->address - (current_addr + 6);
+        emit_u32(buf, diff);
+    } else if (strcasecmp(mnemonic, "jl") == 0) {
+        emit_u8(buf, 0x0F); emit_u8(buf, 0x8C);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); emit_u32(buf, diff);
+    } else if (strcasecmp(mnemonic, "jle") == 0) {
+        emit_u8(buf, 0x0F); emit_u8(buf, 0x8E);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); emit_u32(buf, diff);
+    } else if (strcasecmp(mnemonic, "jg") == 0) {
+        emit_u8(buf, 0x0F); emit_u8(buf, 0x8F);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); emit_u32(buf, diff);
+    } else if (strcasecmp(mnemonic, "jge") == 0) {
+        emit_u8(buf, 0x0F); emit_u8(buf, 0x8D);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); emit_u32(buf, diff);
+    } else if (strcasecmp(mnemonic, "sete") == 0) {
+        Operand ext = {0}; ext.reg=0; emit_insn_modrm(buf, 0x0F94, &ext, &op1);
+    } else if (strcasecmp(mnemonic, "setne") == 0) {
+        Operand ext = {0}; ext.reg=0; emit_insn_modrm(buf, 0x0F95, &ext, &op1);
+    } else if (strcasecmp(mnemonic, "setl") == 0) {
+        Operand ext = {0}; ext.reg=0; emit_insn_modrm(buf, 0x0F9C, &ext, &op1);
+    } else if (strcasecmp(mnemonic, "setle") == 0) {
+        Operand ext = {0}; ext.reg=0; emit_insn_modrm(buf, 0x0F9E, &ext, &op1);
+    } else if (strcasecmp(mnemonic, "movzx") == 0) { // movzx rm, reg -> 0F B6 /r
+        emit_insn_modrm(buf, 0x0FB6, &op2, &op1);
+    } else if (strcasecmp(mnemonic, "movsx") == 0) { // movsx rm, reg -> 0F BE /r
+        emit_insn_modrm(buf, 0x0FBE, &op2, &op1);
+    } else if (strcasecmp(mnemonic, "movsbl") == 0) {
+        emit_insn_modrm(buf, 0x0FBE, &op2, &op1);
+    } else if (strcasecmp(mnemonic, "movswl") == 0) {
+        emit_insn_modrm(buf, 0x0FBF, &op2, &op1);
+    } else if (strcasecmp(mnemonic, "movzbl") == 0) {
+        emit_insn_modrm(buf, 0x0FB6, &op2, &op1);
+    } else if (strcasecmp(mnemonic, "movzwl") == 0) {
+        emit_insn_modrm(buf, 0x0FB7, &op2, &op1);
+    } else if (strcasecmp(mnemonic, "cdq") == 0) {
+        emit_u8(buf, 0x99);
+    } 
+    
+    if (buf && *buf) return *buf - start_buf;
+    return 0;
+}
+
+int assemble_x86(const char *asm_text, size_t asm_len, char *output, size_t output_max, size_t *output_len) {
+    reset_labels();
+    
+    uint32_t current_addr_base = 0x08048000 + 84;
+    uint32_t current_addr = current_addr_base;
+    char line[256];
+    const char *p = asm_text;
+    
+    // Pass 1
+    while (p < asm_text + asm_len) {
+        const char *eol = strchr(p, '\n');
+        if (!eol) eol = asm_text + asm_len;
+        int len = eol - p;
+        if (len >= 256) len = 255;
+        strncpy(line, p, len);
+        line[len] = '\0';
         
-        line_start = line_end + 1;
+        char *start = line;
+        while (*start == ' ' || *start == '\t') start++;
+        if (*start && *start != ';' && *start != '#') {
+             uint8_t tmp[32];
+             uint8_t *ptr = tmp;
+             int sz = process_instruction(start, &ptr, current_addr, 1);
+             current_addr += sz;
+        }
+        p = eol + 1;
     }
     
-    // Add final RET instruction if not present
-    if (code_size < code_space) {
-        code_start[code_size++] = 0xC3; // RET
+    uint32_t code_size = current_addr - current_addr_base;
+    if (output_max < 84 + code_size) return 1;
+    
+    // ELF Header
+    memset(output, 0, 84);
+    ELF32_Header *eh = (ELF32_Header*)output;
+    eh->e_ident[0] = 0x7F; eh->e_ident[1] = 'E'; eh->e_ident[2] = 'L'; eh->e_ident[3] = 'F';
+    eh->e_ident[4] = 1; eh->e_ident[5] = 1; eh->e_ident[6] = 1;
+    eh->e_type = 2; eh->e_machine = 3; eh->e_version = 1;
+    eh->e_entry = current_addr_base;
+    eh->e_phoff = 52; eh->e_ehsize = 52; eh->e_phentsize = 32; eh->e_phnum = 1;
+    ELF32_ProgramHeader *ph = (ELF32_ProgramHeader*)(output + 52);
+    ph->p_type = 1; ph->p_vaddr = 0x08048000; ph->p_paddr = 0x08048000;
+    ph->p_filesz = 84 + code_size; ph->p_memsz = 84 + code_size;
+    ph->p_flags = 7; ph->p_align = 0x1000;
+    
+    // Pass 2
+    current_addr = current_addr_base;
+    uint8_t *out_ptr = (uint8_t*)output + 84;
+    p = asm_text;
+    
+    while (p < asm_text + asm_len) {
+        const char *eol = strchr(p, '\n');
+        if (!eol) eol = asm_text + asm_len;
+        int len = eol - p;
+        if (len >= 256) len = 255;
+        strncpy(line, p, len);
+        line[len] = '\0';
+        
+        char *start = line;
+        while (*start == ' ' || *start == '\t') start++;
+        if (*start && *start != ';' && *start != '#') {
+             uint8_t *prev = out_ptr;
+             process_instruction(start, &out_ptr, current_addr, 2);
+             current_addr += (out_ptr - prev);
+        }
+        p = eol + 1;
     }
     
-    // Update ELF header with actual code size
-    generate_elf_header((uint8_t *)output, code_size);
-    
-    if (output_len) *output_len = ELF_HEADER_SIZE + code_size;
-    
+    *output_len = 84 + code_size;
     return 0;
 }
