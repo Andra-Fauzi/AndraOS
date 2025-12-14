@@ -1514,6 +1514,62 @@ static bool is_typename(Token *tok) {
 }
 
 // asm-stmt = "asm" ("volatile" | "inline")* "(" string-literal ")"
+static Node *read_asm_operands(Token **rest, Token *tok) {
+  Node head = {};
+  Node *cur = &head;
+
+  while (!equal(tok, ":") && !equal(tok, ")")) {
+    if (cur != &head)
+      tok = skip(tok, ",");
+
+    Node *node = new_node(ND_ASM, tok);
+    
+    if (equal(tok, "[")) {
+      tok = tok->next;
+      if (tok->kind != TK_IDENT)
+        error_tok(tok, "expected identifier");
+      node->asm_operand_name = strndup(tok->loc, tok->len);
+      tok = skip(tok->next, "]");
+    }
+
+    if (tok->kind != TK_STR)
+      error_tok(tok, "expected string literal");
+    node->asm_str = tok->str;
+    tok = tok->next;
+
+    tok = skip(tok, "(");
+    node->lhs = expr(&tok, tok);
+    tok = skip(tok, ")");
+
+    cur = cur->next = node;
+  }
+
+  *rest = tok;
+  return head.next;
+}
+
+static Node *read_asm_clobbers(Token **rest, Token *tok) {
+  Node head = {};
+  Node *cur = &head;
+
+  while (!equal(tok, ":") && !equal(tok, ")")) {
+    if (cur != &head)
+      tok = skip(tok, ",");
+
+    if (tok->kind != TK_STR)
+      error_tok(tok, "expected string literal");
+
+    Node *node = new_node(ND_ASM, tok);
+    node->asm_str = tok->str;
+    cur = cur->next = node;
+    tok = tok->next;
+  }
+
+  *rest = tok;
+  return head.next;
+}
+
+// asm-stmt = "asm" ("volatile" | "inline")* "(" string-literal ")"
 static Node *asm_stmt(Token **rest, Token *tok) {
   Node *node = new_node(ND_ASM, tok);
   tok = tok->next;
@@ -1525,7 +1581,24 @@ static Node *asm_stmt(Token **rest, Token *tok) {
   if (tok->kind != TK_STR || tok->ty->base->kind != TY_CHAR)
     error_tok(tok, "expected string literal");
   node->asm_str = tok->str;
-  *rest = skip(tok->next, ")");
+  tok = tok->next;
+
+  if (equal(tok, ":")) {
+    tok = tok->next;
+    node->asm_outputs = read_asm_operands(&tok, tok);
+  }
+
+  if (equal(tok, ":")) {
+    tok = tok->next;
+    node->asm_inputs = read_asm_operands(&tok, tok);
+  }
+
+  if (equal(tok, ":")) {
+    tok = tok->next;
+    node->asm_clobbers = read_asm_clobbers(&tok, tok);
+  }
+
+  *rest = skip(tok, ")");
   return node;
 }
 

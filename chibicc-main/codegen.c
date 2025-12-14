@@ -27,9 +27,18 @@ int chi_vprintf(MemStream *w, const char *fmt, va_list ap) {
     while (*p) {
         if (*p == '%') {
             p++;
+            bool is_long = false;
+            if (*p == 'l') {
+                is_long = true;
+                p++;
+            }
+
             switch (*p) {
             case 'd': {
-                int val = va_arg(ap, int);
+                long val;
+                if (is_long) val = va_arg(ap, long);
+                else val = va_arg(ap, int);
+
                 int n = 0;
                 if (val == 0) {
                     buf[n++] = '0';
@@ -58,7 +67,10 @@ int chi_vprintf(MemStream *w, const char *fmt, va_list ap) {
                 break;
             }
             case 'u': {
-                unsigned int val = va_arg(ap, unsigned int);
+                unsigned long val;
+                if (is_long) val = va_arg(ap, unsigned long);
+                else val = va_arg(ap, unsigned int);
+
                 int n = 0;
                 if (val == 0) {
                     buf[n++] = '0';
@@ -76,7 +88,10 @@ int chi_vprintf(MemStream *w, const char *fmt, va_list ap) {
                 break;
             }
             case 'x': {
-                unsigned int val = va_arg(ap, unsigned int);
+                unsigned long val;
+                if (is_long) val = va_arg(ap, unsigned long);
+                else val = va_arg(ap, unsigned int);
+
                 int n = 0;
                 if (val == 0) {
                     buf[n++] = '0';
@@ -1306,6 +1321,113 @@ static void gen_expr(Node *node) {
   error_tok(node->tok, "invalid expression");
 }
 
+static void gen_asm(Node *node) {
+  if (!node->asm_inputs && !node->asm_outputs) {
+    println("  %s", node->asm_str);
+    return;
+  }
+
+  Node *args[30];
+  int nargs = 0;
+
+  for (Node *n = node->asm_outputs; n; n = n->next)
+    args[nargs++] = n;
+
+  int num_outputs = nargs;
+
+  for (Node *n = node->asm_inputs; n; n = n->next)
+    args[nargs++] = n;
+
+  if (nargs > 30)
+    error_tok(node->tok, "too many asm operands");
+
+  char *regs[30];
+  const char *r32[] = {"%edi", "%esi", "%edx", "%ecx", "%ebx", "%eax"};
+  const char *r16[] = {"%di", "%si", "%dx", "%cx", "%bx", "%ax"};
+  const char *r8[] =  {"%dil", "%sil", "%dl", "%cl", "%bl", "%al"};
+
+  for (int i = 0; i < nargs; i++) {
+    int sz = args[i]->lhs->ty->size;
+    char *constraint = args[i]->asm_str;
+    regs[i] = NULL;
+    
+    if (constraint) {
+       if (strchr(constraint, 'a')) regs[i] = reg_ax(sz);
+       else if (strchr(constraint, 'b')) regs[i] = (sz==4?"%ebx":(sz==2?"%bx":"%bl"));
+       else if (strchr(constraint, 'c')) regs[i] = (sz==4?"%ecx":(sz==2?"%cx":"%cl"));
+       else if (strchr(constraint, 'd')) regs[i] = (sz==4?"%edx":(sz==2?"%dx":"%dl"));
+       else if (strchr(constraint, 'S')) {
+            if (sz == 1) error_tok(node->tok, "cannot use SI/ESI for 8-bit operand");
+            regs[i] = (sz==4?"%esi":"%si");
+       }
+       else if (strchr(constraint, 'D')) {
+            if (sz == 1) error_tok(node->tok, "cannot use DI/EDI for 8-bit operand");
+            regs[i] = (sz==4?"%edi":"%di");
+       }
+    }
+
+    if (regs[i]) continue;
+
+    if (sz == 8) error_tok(node->tok, "asm does not support 64-bit operands in 32-bit mode");
+    else if (sz == 4) regs[i] = (char *)r32[i];
+    else if (sz == 2) regs[i] = (char *)r16[i];
+    else if (sz == 1) regs[i] = (char *)r8[i];
+    else error_tok(node->tok, "asm only supports integer operands");
+  }
+
+  for (int i = num_outputs; i < nargs; i++) {
+    gen_expr(args[i]->lhs);
+    push();
+  }
+
+  for (int i = nargs - 1; i >= num_outputs; i--) {
+    pop(regs[i]);
+  }
+
+  char buf[4096];
+  char *d = buf;
+  char *p = node->asm_str;
+
+  while (*p && d < buf + 4096 - 100) {
+    if (*p == '%') {
+      if (p[1] == '%') {
+        *d++ = '%';
+        p += 2;
+        continue;
+      }
+      
+      char *end;
+      long idx = strtoul(p + 1, &end, 10);
+      if (end != p + 1) {
+        if (idx < 0 || idx >= nargs)
+          error_tok(node->tok, "invalid operand index");
+        char *r = regs[idx];
+        while (*r) *d++ = *r++;
+        p = end;
+        continue;
+      }
+    }
+    *d++ = *p++;
+  }
+  *d = 0;
+  println("  %s", buf);
+
+  for (int i = 0; i < num_outputs; i++) {
+    gen_addr(args[i]->lhs);
+    
+    // The previous instruction (gen_addr) put the address in %rax.
+    // The value to store is in regs[i].
+    // Since %rax is used for address, we can't use it for the value.
+    // Fortunaltey regs[i] is likely NOT %rax (we used rdi etc).
+    
+    int sz = args[i]->lhs->ty->size;
+    if (sz == 8) println("  mov %s, (%%rax)", regs[i]);
+    else if (sz == 4) println("  mov %s, (%%rax)", regs[i]);
+    else if (sz == 2) println("  mov %s, (%%rax)", regs[i]);
+    else if (sz == 1) println("  mov %s, (%%rax)", regs[i]);
+  }
+}
+
 static void gen_stmt(Node *node) {
   println("  .loc %d %d", node->tok->file->file_no, node->tok->line_no);
 
@@ -1420,7 +1542,7 @@ static void gen_stmt(Node *node) {
     gen_expr(node->lhs);
     return;
   case ND_ASM:
-    println("  %s", node->asm_str);
+    gen_asm(node);
     return;
   }
 

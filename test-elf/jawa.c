@@ -22,6 +22,11 @@ int main() {
     asm volatile("mov $1, %eax");
     asm volatile("mov $97, %ebx");   // 'a'
     asm volatile("int $0x80");
+
+    // asm volatile("mov %0, %%ebx" :: "a"('\n'));
+    // asm volatile("mov %0, %%eax" :: "a"(1));
+    asm volatile("int $0x80" :: "a"(1), "b"('\n'));
+    // asm volatile("int $0x80");
     
     return 0;
 }

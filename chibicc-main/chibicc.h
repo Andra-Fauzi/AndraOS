@@ -272,6 +272,10 @@ struct Node {
 
   // "asm" string literal
   char *asm_str;
+  Node *asm_outputs;
+  Node *asm_inputs;
+  Node *asm_clobbers;
+  char *asm_operand_name;
 
   // Atomic compare-and-swap
   Node *cas_addr;
