@@ -207,7 +207,7 @@ void terminal_init(multiboot_info_t *mb_info) {
 */
 
 #define CHAR_SIZE 8
-#define SCALE 2
+#define SCALE 1
 #define CHAR_WIDTH (CHAR_SIZE * SCALE)
 #define CHAR_HEIGHT (CHAR_SIZE * SCALE)
 

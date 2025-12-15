@@ -3,9 +3,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+extern multiboot_info_t *multiboot_info;
+
 // -----------------------------------------------------------------------------
 // Data Structures
 // -----------------------------------------------------------------------------
+
+#define ELF_BASE 0X4048000
+#define ELF_HDRSZ 84
+#define CODE_BASE (ELF_BASE + ELF_HDRSZ)
 
 #define MAX_LABELS 512
 
@@ -305,6 +311,15 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
             if (l) {
                 l->address = current_addr;
                 l->defined = true;
+                char buf[128];
+                to_string(current_addr, buf);
+                kprint("Defined label: ", multiboot_info);
+                kprint(mnemonic, multiboot_info);
+                kprint(" at ", multiboot_info);
+                kprint(buf, multiboot_info);
+                kprint(" (hex: ", multiboot_info);
+                kprint_hex(current_addr, multiboot_info);
+                kprint(")\n", multiboot_info);
             }
         }
         return 0;
@@ -423,7 +438,7 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
         emit_insn_modrm(buf, 0x8D, &op2, &op1);
     } else if (strcasecmp(mnemonic, "jmp") == 0) {
         emit_u8(buf, 0xE9);
-        uint32_t diff = 0;
+        int32_t diff = 0;
         AsmLabel *l = find_label(op1.label_name);
         if (pass == 2 && l) diff = l->address - (current_addr + 5);
         emit_u32(buf, diff);
@@ -431,14 +446,39 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
         if (op1.type == OP_REG) { emit_u8(buf, 0xFF); emit_modrm(buf, 3, 2, op1.reg); } // call r/m
         else {
             emit_u8(buf, 0xE8);
-            uint32_t diff = 0;
+            int32_t diff = 0;
             AsmLabel *l = find_label(op1.label_name);
-            if (pass == 2 && l) diff = l->address - (current_addr + 5);
+            kprint("nama label : ", multiboot_info);
+            kprint(op1.label_name, multiboot_info);
+            kprint("\n", multiboot_info);
+            if (pass == 2) {
+                if (!l || !l->defined) {
+                    kprint("undefined label :", multiboot_info);
+                    kprint(op1.label_name, multiboot_info);
+                    kprint("\n", multiboot_info);
+                    exit(1);
+                }
+
+                char buffer[512];
+                to_string(l->address, buffer);
+                kprint("ini address untuk ke label atau function :", multiboot_info);
+                kprint_hex(l->address, multiboot_info);
+                kprint("\n", multiboot_info);
+                to_string(current_addr, buffer);
+                kprint("ini address saat ini:", multiboot_info);
+                kprint_hex(current_addr, multiboot_info);
+                kprint("\n", multiboot_info);
+                diff = (int32_t)((int32_t)l->address) - (int32_t)((int32_t)current_addr + 5);
+                kprint("ini address yang dituju:", multiboot_info);
+                kprint_hex(diff, multiboot_info);
+                kprint("\n", multiboot_info);
+            }
             emit_u32(buf, diff);
+
         }
     } else if (strcasecmp(mnemonic, "je") == 0 || strcasecmp(mnemonic, "jz") == 0) {
         emit_u8(buf, 0x0F); emit_u8(buf, 0x84);
-        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name);
+        int32_t diff = 0; AsmLabel *l = find_label(op1.label_name);
         if (pass == 2 && l) diff = l->address - (current_addr + 6);
         emit_u32(buf, diff);
     } else if (strcasecmp(mnemonic, "jne") == 0 || strcasecmp(mnemonic, "jnz") == 0) {
@@ -489,7 +529,7 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
 int assemble_x86(const char *asm_text, size_t asm_len, char *output, size_t output_max, size_t *output_len) {
     reset_labels();
     
-    uint32_t current_addr_base = 0x08048000 + 84;
+    uint32_t current_addr_base = CODE_BASE;
     uint32_t current_addr = current_addr_base;
     char line[256];
     const char *p = asm_text;
@@ -506,7 +546,7 @@ int assemble_x86(const char *asm_text, size_t asm_len, char *output, size_t outp
         char *start = line;
         while (*start == ' ' || *start == '\t') start++;
         if (*start && *start != ';' && *start != '#') {
-             uint8_t tmp[32];
+             uint8_t tmp[128];
              uint8_t *ptr = tmp;
              int sz = process_instruction(start, &ptr, current_addr, 1);
              current_addr += sz;
@@ -523,11 +563,11 @@ int assemble_x86(const char *asm_text, size_t asm_len, char *output, size_t outp
     eh->e_ident[0] = 0x7F; eh->e_ident[1] = 'E'; eh->e_ident[2] = 'L'; eh->e_ident[3] = 'F';
     eh->e_ident[4] = 1; eh->e_ident[5] = 1; eh->e_ident[6] = 1;
     eh->e_type = 2; eh->e_machine = 3; eh->e_version = 1;
-    eh->e_entry = current_addr_base;
+    eh->e_entry = CODE_BASE;
     eh->e_phoff = 52; eh->e_ehsize = 52; eh->e_phentsize = 32; eh->e_phnum = 1;
     ELF32_ProgramHeader *ph = (ELF32_ProgramHeader*)(output + 52);
-    ph->p_type = 1; ph->p_vaddr = 0x08048000; ph->p_paddr = 0x08048000;
-    ph->p_filesz = 84 + code_size; ph->p_memsz = 84 + code_size;
+    ph->p_type = 1; ph->p_vaddr = ELF_BASE; ph->p_paddr = 0x08048000;
+    ph->p_filesz = ELF_HDRSZ + code_size; ph->p_memsz = ELF_HDRSZ + code_size;
     ph->p_flags = 7; ph->p_align = 0x1000;
     
     // Pass 2

@@ -216,7 +216,6 @@ int subc_compile(char *src, int src_len, char *dest, size_t dest_max, size_t *de
 
     extern multiboot_info_t *multiboot_info;
     extern uint16_t active_cluster;
-    /*
     kprint("hasil buffer : \n", multiboot_info);
     kprint(asm_buffer, multiboot_info);
     print_char('\n', multiboot_info);
@@ -225,7 +224,6 @@ int subc_compile(char *src, int src_len, char *dest, size_t dest_max, size_t *de
     to_string(asm_len, len_str);
     kprint(len_str, multiboot_info);
     print_char('\n', multiboot_info);
-    */
 
     // char name[11];
     // to_fat_name_fixed("sigma.asm\0", name);
