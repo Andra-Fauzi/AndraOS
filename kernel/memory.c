@@ -6,7 +6,7 @@ extern uint8_t _end;
 #define MIN_BLOCK_SIZE 16
 #define ALIGNMENT 4
 #define PAGE_SIZE 4096
-#define HEAP_REGION 512 * 1024
+#define HEAP_REGION 2048 * 1024
 
 uint8_t *heap_start;
 uint8_t *heap_end;
