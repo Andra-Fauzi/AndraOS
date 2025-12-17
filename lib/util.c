@@ -257,6 +257,17 @@ char *strdup(const char *s) {
     return copy;
 }
 
+const char *strpbrk(const char *s, const char *accept) {
+    for (; *s; s++) {
+        for (const char *a = accept; *a; a++) {
+            if (*s == *a)
+                return s;
+        }
+    }
+    return NULL;
+}
+
+
 // Alokasi ulang minimal
 static char *realloc_buffer(char *buf, size_t old_cap, size_t new_cap) {
     char *new_buf = malloc(new_cap);

@@ -31,10 +31,25 @@ static void reset_labels() {
 
 static AsmLabel *find_label(const char *name) {
     for (int i = 0; i < label_count; i++) {
+        #ifdef DEBUG
+        kprint("\n", multiboot_info);
+        kprint("ini label yang di cari:", multiboot_info);
+        kprint(name, multiboot_info);
+        kprint("\n", multiboot_info);
+        kprint("ini label yang ditemukan:", multiboot_info);
+        kprint(labels[i].name, multiboot_info);
+        kprint("\n", multiboot_info);
+        #endif
         if (strcmp(labels[i].name, name) == 0) {
+            #ifdef DEBUG
+            kprint("ketemu\n", multiboot_info);
+            #endif
             return &labels[i];
         }
     }
+    #ifdef DEBUG
+    kprint("tidak ketemu\n", multiboot_info);
+    #endif
     return NULL;
 }
 
@@ -128,6 +143,7 @@ typedef struct {
     int32_t offset;
     int base_reg;
     char label_name[64];
+    bool indirect;
 } Operand;
 
 // -----------------------------------------------------------------------------
@@ -168,6 +184,11 @@ static int parse_operand_str(const char *text, Operand *op) {
         return 1;
     }
 
+    if (*p == '*') {
+        op->indirect = true;
+        p++;
+    }
+
     // Character literal: 'a'
     if (*p == '\'') {
         op->type = OP_IMM;
@@ -191,9 +212,10 @@ static int parse_operand_str(const char *text, Operand *op) {
         return 0;
     }
     
+    
     // Memory: disp(%reg), (%reg), disp, label
     const char *lparen = strchr(p, '(');
-    if (lparen) {
+    if (*p == '(' || (strchr(p, '(') && strchr(p, '(') < strpbrk(p, " \t\n,"))) {
         op->type = OP_MEM;
         if (lparen > p) {
             strncpy(buf, p, lparen - p);
@@ -206,14 +228,14 @@ static int parse_operand_str(const char *text, Operand *op) {
         }
         const char *rstart = lparen + 1;
         if (*rstart == '%') {
-             const char *rend = rstart + 1;
-             while (isalnum(*rend)) rend++;
-             char regname[16];
-             int rlen = rend - (rstart + 1);
-             strncpy(regname, rstart + 1, rlen);
-             regname[rlen] = '\0';
-             int dummy;
-             if (!get_register(regname, &op->base_reg, &dummy)) return 0;
+            const char *rend = rstart + 1;
+            while (isalnum(*rend)) rend++;
+            char regname[16];
+            int rlen = rend - (rstart + 1);
+            strncpy(regname, rstart + 1, rlen);
+            regname[rlen] = '\0';
+            int dummy;
+            if (!get_register(regname, &op->base_reg, &dummy)) return 0;
         }
         return 1;
     }
@@ -227,7 +249,7 @@ static int parse_operand_str(const char *text, Operand *op) {
         op->type = OP_LABEL;
         return 1;
     }
-
+    
     // Bare number - treat as immediate for convenience (e.g. mov 1, %eax)
     if (isdigit(*p) || (*p == '-' && isdigit(*(p+1)))) {
         op->type = OP_IMM;
@@ -301,6 +323,23 @@ static void emit_insn_modrm(uint8_t **buf, int opcode, Operand *op_reg, Operand 
 // -----------------------------------------------------------------------------
 
 int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, int pass) {
+    int size = 0;
+    #define EMIT_U8(x)   do { if (buf) emit_u8(buf, x); size++; } while(0)
+    #define EMIT_U32(x) do { if (buf) emit_u32(buf, x); size += 4; } while(0)
+    #define EMIT_MODRM(mod, reg, rm) \
+    do { if (buf) emit_modrm(buf, mod, reg, rm); size++; } while(0)
+    #define EMIT_INSN_MODRM(opcode, op_reg, op_rm) do { \
+    emit_insn_modrm(buf, opcode, op_reg, op_rm); \
+    if (pass == 1) { \
+        size += 1; \
+        if ((op_rm)->type == OP_MEM) { \
+            if ((op_rm)->offset != 0 || (op_rm)->base_reg == 5) size += 4; \
+        } \
+    } \
+} while(0)
+    
+
+
     char mnemonic[32];
     const char *p = parse_token(line, mnemonic, 32);
     if (!p) return 0;
@@ -311,12 +350,12 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
             if (l) {
                 l->address = current_addr;
                 l->defined = true;
-                char buf[128];
-                to_string(current_addr, buf);
+                char buf1[128];
+                to_string(current_addr, buf1);
                 kprint("Defined label: ", multiboot_info);
                 kprint(mnemonic, multiboot_info);
                 kprint(" at ", multiboot_info);
-                kprint(buf, multiboot_info);
+                kprint(buf1, multiboot_info);
                 kprint(" (hex: ", multiboot_info);
                 kprint_hex(current_addr, multiboot_info);
                 kprint(")\n", multiboot_info);
@@ -346,111 +385,114 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
     
     uint8_t *start_buf = buf ? *buf : NULL;
     
-    if (strcasecmp(mnemonic, "nop") == 0) emit_u8(buf, 0x90);
-    else if (strcasecmp(mnemonic, "ret") == 0) emit_u8(buf, 0xC3);
-    else if (strcasecmp(mnemonic, "leave") == 0) emit_u8(buf, 0xC9);
+    if (strcasecmp(mnemonic, "nop") == 0) EMIT_U8(0x90);
+    else if (strcasecmp(mnemonic, "ret") == 0) EMIT_U8(0xC3);
+    else if (strcasecmp(mnemonic, "leave") == 0) EMIT_U8(0xC9);
     else if (strcasecmp(mnemonic, "int") == 0) { // e.g., int 0x80
-        emit_u8(buf, 0xCD); 
-        emit_u8(buf, (uint8_t)op1.offset);
+        EMIT_U8(0xCD); 
+        EMIT_U8((uint8_t)op1.offset);
     }
     else if (strcasecmp(mnemonic, "push") == 0) {
-        if (op1.type == OP_REG) emit_u8(buf, 0x50 + op1.reg);
-        else if (op1.type == OP_IMM) { emit_u8(buf, 0x68); emit_u32(buf, op1.offset); }
+        if (op1.type == OP_REG) EMIT_U8(0x50 + op1.reg);
+        else if (op1.type == OP_IMM) { EMIT_U8(0x68); EMIT_U32(op1.offset); }
         else { 
             // push r/m
             Operand reg_op = {0}; reg_op.reg = 6; // /6
-            emit_insn_modrm(buf, 0xFF, &reg_op, &op1);
+            EMIT_INSN_MODRM( 0xFF, &reg_op, &op1);
         }
     } else if (strcasecmp(mnemonic, "pop") == 0) {
-        if (op1.type == OP_REG) emit_u8(buf, 0x58 + op1.reg);
+        if (op1.type == OP_REG) EMIT_U8(0x58 + op1.reg);
     } else if (strcasecmp(mnemonic, "dec") == 0) {
-        if (op1.type == OP_REG) emit_u8(buf, 0x48 + op1.reg);
+        if (op1.type == OP_REG) EMIT_U8(0x48 + op1.reg);
         // dec r/m? opcode FF /1
     } else if (strcasecmp(mnemonic, "inc") == 0) {
-        if (op1.type == OP_REG) emit_u8(buf, 0x40 + op1.reg);
+        if (op1.type == OP_REG) EMIT_U8(0x40 + op1.reg);
         // inc r/m? opcode FF /0
     } else if (strcasecmp(mnemonic, "neg") == 0) {
         // F7 /3
-        Operand ext = {0}; ext.reg = 3; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+        Operand ext = {0}; ext.reg = 3; EMIT_INSN_MODRM( 0xF7, &ext, &op1);
     } else if (strcasecmp(mnemonic, "not") == 0) {
         // F7 /2
-        Operand ext = {0}; ext.reg = 2; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+        Operand ext = {0}; ext.reg = 2; EMIT_INSN_MODRM( 0xF7, &ext, &op1);
     } else if (strcasecmp(mnemonic, "mul") == 0) { // F7 /4 unsigned
-        Operand ext = {0}; ext.reg = 4; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+        Operand ext = {0}; ext.reg = 4; EMIT_INSN_MODRM( 0xF7, &ext, &op1);
     } else if (strcasecmp(mnemonic, "div") == 0) { // F7 /6 unsigned
-        Operand ext = {0}; ext.reg = 6; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+        Operand ext = {0}; ext.reg = 6; EMIT_INSN_MODRM( 0xF7, &ext, &op1);
     } else if (strcasecmp(mnemonic, "idiv") == 0) { // F7 /7 signed
-        Operand ext = {0}; ext.reg = 7; emit_insn_modrm(buf, 0xF7, &ext, &op1);
+        Operand ext = {0}; ext.reg = 7; EMIT_INSN_MODRM( 0xF7, &ext, &op1);
     } else if (strcasecmp(mnemonic, "imul") == 0) {
-        if (op_count == 2) emit_insn_modrm(buf, 0x0FAF, &op1, &op2);
-        else { /* F7 /5 loop */ Operand ext = {0}; ext.reg = 5; emit_insn_modrm(buf, 0xF7, &ext, &op1); }
+        if (op_count == 2) EMIT_INSN_MODRM( 0x0FAF, &op1, &op2);
+        else { /* F7 /5 loop */ Operand ext = {0}; ext.reg = 5; EMIT_INSN_MODRM( 0xF7, &ext, &op1); }
     } else if (strcasecmp(mnemonic, "add") == 0) {
         if (op1.type == OP_IMM && op2.type == OP_REG) {
              // 81 /0 imm32 (or 83 /0 imm8)
              int opcode = (op1.offset >= -128 && op1.offset <= 127) ? 0x83 : 0x81;
              Operand ext = {0}; ext.reg = 0;
-             emit_insn_modrm(buf, opcode, &ext, &op2); // op2 is destination
-             if (opcode == 0x83) emit_u8(buf, (int8_t)op1.offset); else emit_u32(buf, op1.offset);
-        } else emit_insn_modrm(buf, 0x01, &op1, &op2); // add reg, rm? No add src, dst. chibicc: add %eax, %ebx (dst=%ebx). Op 01: ADD r/m, r. src=r(op1), dst=rm(op2).
+             EMIT_INSN_MODRM( opcode, &ext, &op2); // op2 is destination
+             if (opcode == 0x83) EMIT_U8((int8_t)op1.offset); else EMIT_U32(op1.offset);
+        } else EMIT_INSN_MODRM( 0x01, &op1, &op2); // add reg, rm? No add src, dst. chibicc: add %eax, %ebx (dst=%ebx). Op 01: ADD r/m, r. src=r(op1), dst=rm(op2).
     } else if (strcasecmp(mnemonic, "sub") == 0) {
         if (op1.type == OP_IMM && op2.type == OP_REG) {
              int opcode = (op1.offset >= -128 && op1.offset <= 127) ? 0x83 : 0x81;
              Operand ext = {0}; ext.reg = 5;
-             emit_insn_modrm(buf, opcode, &ext, &op2);
-             if (opcode == 0x83) emit_u8(buf, (int8_t)op1.offset); else emit_u32(buf, op1.offset);
-        } else emit_insn_modrm(buf, 0x29, &op1, &op2); // sub reg, rm
+             EMIT_INSN_MODRM( opcode, &ext, &op2);
+             if (opcode == 0x83) EMIT_U8((int8_t)op1.offset); else EMIT_U32(op1.offset);
+        } else EMIT_INSN_MODRM( 0x29, &op1, &op2); // sub reg, rm
     } else if (strcasecmp(mnemonic, "and") == 0) {
         if (op1.type == OP_IMM) {
              Operand ext = {0}; ext.reg = 4;
-             emit_insn_modrm(buf, 0x81, &ext, &op2); emit_u32(buf, op1.offset);
-        } else emit_insn_modrm(buf, 0x21, &op1, &op2);
+             EMIT_INSN_MODRM( 0x81, &ext, &op2); EMIT_U32(op1.offset);
+        } else EMIT_INSN_MODRM( 0x21, &op1, &op2);
     } else if (strcasecmp(mnemonic, "or") == 0) {
         if (op1.type == OP_IMM) {
              Operand ext = {0}; ext.reg = 1;
-             emit_insn_modrm(buf, 0x81, &ext, &op2); emit_u32(buf, op1.offset);
-        } else emit_insn_modrm(buf, 0x09, &op1, &op2);
+             EMIT_INSN_MODRM( 0x81, &ext, &op2); EMIT_U32(op1.offset);
+        } else EMIT_INSN_MODRM( 0x09, &op1, &op2);
     } else if (strcasecmp(mnemonic, "xor") == 0) {
         if (op1.type == OP_IMM) {
              Operand ext = {0}; ext.reg = 6;
-             emit_insn_modrm(buf, 0x81, &ext, &op2); emit_u32(buf, op1.offset);
-        } else emit_insn_modrm(buf, 0x31, &op1, &op2);
+             EMIT_INSN_MODRM( 0x81, &ext, &op2); EMIT_U32(op1.offset);
+        } else EMIT_INSN_MODRM( 0x31, &op1, &op2);
     } else if (strcasecmp(mnemonic, "shl") == 0) {
         Operand ext = {0}; ext.reg = 4;
-        if (op1.type == OP_IMM) { emit_insn_modrm(buf, 0xC1, &ext, &op2); emit_u8(buf, op1.offset); }
-        else if (op1.type == OP_REG && op1.reg == 1) { emit_insn_modrm(buf, 0xD3, &ext, &op2); } // cl
+        if (op1.type == OP_IMM) { EMIT_INSN_MODRM( 0xC1, &ext, &op2); EMIT_U8(op1.offset); }
+        else if (op1.type == OP_REG && op1.reg == 1) { EMIT_INSN_MODRM( 0xD3, &ext, &op2); } // cl
     } else if (strcasecmp(mnemonic, "sar") == 0) {
         Operand ext = {0}; ext.reg = 7;
-        if (op1.type == OP_IMM) { emit_insn_modrm(buf, 0xC1, &ext, &op2); emit_u8(buf, op1.offset); }
-        else if (op1.type == OP_REG && op1.reg == 1) { emit_insn_modrm(buf, 0xD3, &ext, &op2); }
+        if (op1.type == OP_IMM) { EMIT_INSN_MODRM( 0xC1, &ext, &op2); EMIT_U8(op1.offset); }
+        else if (op1.type == OP_REG && op1.reg == 1) { EMIT_INSN_MODRM( 0xD3, &ext, &op2); }
     } else if (strcasecmp(mnemonic, "cmp") == 0) {
         if (op1.type == OP_IMM && op2.type == OP_REG) {
              int opcode = (op1.offset >= -128 && op1.offset <= 127) ? 0x83 : 0x81;
              Operand ext = {0}; ext.reg = 7;
-             emit_insn_modrm(buf, opcode, &ext, &op2);
-             if (opcode == 0x83) emit_u8(buf, (int8_t)op1.offset); else emit_u32(buf, op1.offset);
-        } else emit_insn_modrm(buf, 0x39, &op1, &op2);
+             EMIT_INSN_MODRM( opcode, &ext, &op2);
+             if (opcode == 0x83) EMIT_U8((int8_t)op1.offset); else EMIT_U32(op1.offset);
+        } else EMIT_INSN_MODRM( 0x39, &op1, &op2);
     } else if (strcasecmp(mnemonic, "mov") == 0) {
-        if (op1.type == OP_REG && op2.type == OP_REG) emit_insn_modrm(buf, 0x89, &op1, &op2);
-        else if (op1.type == OP_IMM && op2.type == OP_REG) { emit_u8(buf, 0xB8 + op2.reg); emit_u32(buf, op1.offset); }
-        else if (op1.type == OP_MEM && op2.type == OP_REG) emit_insn_modrm(buf, 0x8B, &op2, &op1);
-        else if (op1.type == OP_REG && op2.type == OP_MEM) emit_insn_modrm(buf, 0x89, &op1, &op2);
+        if (op1.type == OP_REG && op2.type == OP_REG) EMIT_INSN_MODRM( 0x89, &op1, &op2);
+        else if (op1.type == OP_IMM && op2.type == OP_REG) { EMIT_U8(0xB8 + op2.reg); EMIT_U32(op1.offset); }
+        else if (op1.type == OP_MEM && op2.type == OP_REG) EMIT_INSN_MODRM( 0x8B, &op2, &op1);
+        else if (op1.type == OP_REG && op2.type == OP_MEM) EMIT_INSN_MODRM( 0x89, &op1, &op2);
     } else if (strcasecmp(mnemonic, "lea") == 0) {
-        emit_insn_modrm(buf, 0x8D, &op2, &op1);
+        EMIT_INSN_MODRM( 0x8D, &op2, &op1);
     } else if (strcasecmp(mnemonic, "jmp") == 0) {
-        emit_u8(buf, 0xE9);
+        EMIT_U8(0xE9);
         int32_t diff = 0;
         AsmLabel *l = find_label(op1.label_name);
         if (pass == 2 && l) diff = l->address - (current_addr + 5);
-        emit_u32(buf, diff);
+        EMIT_U32(diff);
     } else if (strcasecmp(mnemonic, "call") == 0) {
-        if (op1.type == OP_REG) { emit_u8(buf, 0xFF); emit_modrm(buf, 3, 2, op1.reg); } // call r/m
+        if (op1.indirect && (op1.type == OP_REG || op1.type == OP_MEM)) { 
+            Operand ext = {0}; ext.reg = 2;
+            EMIT_INSN_MODRM(0xFF, &ext, &op1); 
+        } // call r/m
         else {
-            emit_u8(buf, 0xE8);
+            EMIT_U8(0xE8);
             int32_t diff = 0;
+            AsmLabel *l = find_label(op1.label_name);
             kprint("nama label : ", multiboot_info);
             kprint(op1.label_name, multiboot_info);
             kprint("\n", multiboot_info);
-            AsmLabel *l = find_label(op1.label_name);
             if (pass == 2) {
                 if (!l || !l->defined) {
                     kprint("undefined label :", multiboot_info);
@@ -462,66 +504,69 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
                 char buffer[512];
                 to_string(l->address, buffer);
                 kprint("ini address untuk ke label atau function :", multiboot_info);
-                kprint_hex(l->address, multiboot_info);
+                kprint_hex((uintptr_t)l->address, multiboot_info);
                 kprint("\n", multiboot_info);
                 to_string(current_addr, buffer);
                 kprint("ini address saat ini:", multiboot_info);
-                kprint_hex(current_addr, multiboot_info);
+                kprint_hex((uintptr_t)current_addr, multiboot_info);
                 kprint("\n", multiboot_info);
-                diff = (int32_t)((int32_t)l->address) - (int32_t)((int32_t)current_addr + 5);
+                diff = l->address - (current_addr + 5);
+                kprint("\n", multiboot_info);
                 kprint("ini address yang dituju:", multiboot_info);
-                kprint_hex(diff, multiboot_info);
+                kprint_hex((uintptr_t)diff, multiboot_info);
                 kprint("\n", multiboot_info);
             }
-            emit_u32(buf, diff);
-
+            EMIT_U32(diff);
         }
     } else if (strcasecmp(mnemonic, "je") == 0 || strcasecmp(mnemonic, "jz") == 0) {
-        emit_u8(buf, 0x0F); emit_u8(buf, 0x84);
+        EMIT_U8(0x0F); EMIT_U8(0x84);
         int32_t diff = 0; AsmLabel *l = find_label(op1.label_name);
         if (pass == 2 && l) diff = l->address - (current_addr + 6);
-        emit_u32(buf, diff);
+        EMIT_U32(diff);
     } else if (strcasecmp(mnemonic, "jne") == 0 || strcasecmp(mnemonic, "jnz") == 0) {
-        emit_u8(buf, 0x0F); emit_u8(buf, 0x85);
+        EMIT_U8(0x0F); EMIT_U8(0x85);
         uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name);
         if (pass == 2 && l) diff = l->address - (current_addr + 6);
-        emit_u32(buf, diff);
+        EMIT_U32(diff);
     } else if (strcasecmp(mnemonic, "jl") == 0) {
-        emit_u8(buf, 0x0F); emit_u8(buf, 0x8C);
-        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); emit_u32(buf, diff);
+        EMIT_U8(0x0F); EMIT_U8(0x8C);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); EMIT_U32(diff);
     } else if (strcasecmp(mnemonic, "jle") == 0) {
-        emit_u8(buf, 0x0F); emit_u8(buf, 0x8E);
-        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); emit_u32(buf, diff);
+        EMIT_U8(0x0F); EMIT_U8(0x8E);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); EMIT_U32(diff);
     } else if (strcasecmp(mnemonic, "jg") == 0) {
-        emit_u8(buf, 0x0F); emit_u8(buf, 0x8F);
-        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); emit_u32(buf, diff);
+        EMIT_U8(0x0F); EMIT_U8(0x8F);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); EMIT_U32(diff);
     } else if (strcasecmp(mnemonic, "jge") == 0) {
-        emit_u8(buf, 0x0F); emit_u8(buf, 0x8D);
-        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); emit_u32(buf, diff);
+        EMIT_U8(0x0F); EMIT_U8(0x8D);
+        uint32_t diff = 0; AsmLabel *l = find_label(op1.label_name); if (pass==2 && l) diff = l->address - (current_addr + 6); EMIT_U32(diff);
     } else if (strcasecmp(mnemonic, "sete") == 0) {
-        Operand ext = {0}; ext.reg=0; emit_insn_modrm(buf, 0x0F94, &ext, &op1);
+        Operand ext = {0}; ext.reg=0; EMIT_INSN_MODRM( 0x0F94, &ext, &op1);
     } else if (strcasecmp(mnemonic, "setne") == 0) {
-        Operand ext = {0}; ext.reg=0; emit_insn_modrm(buf, 0x0F95, &ext, &op1);
+        Operand ext = {0}; ext.reg=0; EMIT_INSN_MODRM( 0x0F95, &ext, &op1);
     } else if (strcasecmp(mnemonic, "setl") == 0) {
-        Operand ext = {0}; ext.reg=0; emit_insn_modrm(buf, 0x0F9C, &ext, &op1);
+        Operand ext = {0}; ext.reg=0; EMIT_INSN_MODRM( 0x0F9C, &ext, &op1);
     } else if (strcasecmp(mnemonic, "setle") == 0) {
-        Operand ext = {0}; ext.reg=0; emit_insn_modrm(buf, 0x0F9E, &ext, &op1);
+        Operand ext = {0}; ext.reg=0; EMIT_INSN_MODRM( 0x0F9E, &ext, &op1);
     } else if (strcasecmp(mnemonic, "movzx") == 0) { // movzx rm, reg -> 0F B6 /r
-        emit_insn_modrm(buf, 0x0FB6, &op2, &op1);
+        EMIT_INSN_MODRM( 0x0FB6, &op2, &op1);
     } else if (strcasecmp(mnemonic, "movsx") == 0) { // movsx rm, reg -> 0F BE /r
-        emit_insn_modrm(buf, 0x0FBE, &op2, &op1);
+        EMIT_INSN_MODRM( 0x0FBE, &op2, &op1);
     } else if (strcasecmp(mnemonic, "movsbl") == 0) {
-        emit_insn_modrm(buf, 0x0FBE, &op2, &op1);
+        EMIT_INSN_MODRM( 0x0FBE, &op2, &op1);
     } else if (strcasecmp(mnemonic, "movswl") == 0) {
-        emit_insn_modrm(buf, 0x0FBF, &op2, &op1);
+        EMIT_INSN_MODRM( 0x0FBF, &op2, &op1);
     } else if (strcasecmp(mnemonic, "movzbl") == 0) {
-        emit_insn_modrm(buf, 0x0FB6, &op2, &op1);
+        EMIT_INSN_MODRM( 0x0FB6, &op2, &op1);
     } else if (strcasecmp(mnemonic, "movzwl") == 0) {
-        emit_insn_modrm(buf, 0x0FB7, &op2, &op1);
+        EMIT_INSN_MODRM( 0x0FB7, &op2, &op1);
     } else if (strcasecmp(mnemonic, "cdq") == 0) {
-        emit_u8(buf, 0x99);
+        EMIT_U8(0x99);
     } 
     
+    if(pass == 1) {
+        return size;
+    }
     if (buf && *buf) return *buf - start_buf;
     return 0;
 }
@@ -566,7 +611,7 @@ int assemble_x86(const char *asm_text, size_t asm_len, char *output, size_t outp
     eh->e_entry = CODE_BASE;
     eh->e_phoff = 52; eh->e_ehsize = 52; eh->e_phentsize = 32; eh->e_phnum = 1;
     ELF32_ProgramHeader *ph = (ELF32_ProgramHeader*)(output + 52);
-    ph->p_type = 1; ph->p_vaddr = ELF_BASE; ph->p_paddr = 0x08048000;
+    ph->p_type = 1; ph->p_vaddr = ELF_BASE; ph->p_paddr = ELF_BASE;
     ph->p_filesz = ELF_HDRSZ + code_size; ph->p_memsz = ELF_HDRSZ + code_size;
     ph->p_flags = 7; ph->p_align = 0x1000;
     

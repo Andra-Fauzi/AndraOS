@@ -4,10 +4,10 @@ extern uint16_t active_cluster;
 
 void c_as(char *buffer, int length, multiboot_info_t *mb_info) {
     char args[3][128];
-    // expect: compile input.c output.elf
+    // expect: compile input.asm output.elf
     substr(buffer, ' ', length, args);
     if (args[1][0] == '\0' || args[2][0] == '\0') {
-        kprint("Usage: compile <input.c> <output.elf>\n", mb_info);
+        kprint("Usage: compile <input.asm> <output.elf>\n", mb_info);
         return;
     }
     

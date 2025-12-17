@@ -52,3 +52,4 @@ long double strtold(const char *str, char **endptr);
 char *strdup(const char *s);unsigned long strtoul(const char *str, char **endptr, int base);
 long double strtold(const char *str, char **endptr);
 void exit(int status);
+const char *strpbrk(const char *s, const char *accept);
