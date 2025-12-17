@@ -840,13 +840,13 @@ static void gen_expr(Node *node) {
       return;
     }
     case TY_DOUBLE: {
-      union { double f64; uint64_t u64; } u = { node->fval };
+      union { double f64; uint32_t u64; } u = { node->fval };
       println("  mov $%lu, %%eax  # double %Lf", u.u64, node->fval);
       println("  movl %%eax, %%xmm0");
       return;
     }
     case TY_LDOUBLE: {
-      union { long double f80; uint64_t u64[2]; } u;
+      union { long double f80; uint32_t u64[2]; } u;
       memset(&u, 0, sizeof(u));
       u.f80 = node->fval;
       println("  mov $%lu, %%eax  # long double %Lf", u.u64[0], node->fval);

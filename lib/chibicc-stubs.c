@@ -138,22 +138,22 @@ long double strtold(const char *str, char **endptr) {
     return result * sign;
 }
 
-// GCC builtins for 64-bit arithmetic on i386
-unsigned long long __udivdi3(unsigned long long a, unsigned long long b) {
-    return a / b;
-}
+// // GCC builtins for 64-bit arithmetic on i386
+// unsigned long long __udivdi3(unsigned long long a, unsigned long long b) {
+//     return a / b;
+// }
 
-long long __divdi3(long long a, long long b) {
-    return a / b;
-}
+// long long __divdi3(long long a, long long b) {
+//     return a / b;
+// }
 
-unsigned long long __umoddi3(unsigned long long a, unsigned long long b) {
-    return a % b;
-}
+// unsigned long long __umoddi3(unsigned long long a, unsigned long long b) {
+//     return a % b;
+// }
 
-long long __moddi3(long long a, long long b) {
-    return a % b;
-}
+// long long __moddi3(long long a, long long b) {
+//     return a % b;
+// }
 
 // Chibicc variables and functions
 StringArray include_paths = {NULL, 0, 0};

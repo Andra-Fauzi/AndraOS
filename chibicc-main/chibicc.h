@@ -65,7 +65,7 @@ typedef struct Token Token;
 struct Token {
   TokenKind kind;   // Token kind
   Token *next;      // Next token
-  int64_t val;      // If kind is TK_NUM, its value
+  int32_t val;      // If kind is TK_NUM, its value
   long double fval; // If kind is TK_NUM, its value
   char *loc;        // Token location
   int len;          // Token length
@@ -290,12 +290,12 @@ struct Node {
   Obj *var;
 
   // Numeric literal
-  int64_t val;
+  int32_t val;
   long double fval;
 };
 
 Node *new_cast(Node *expr, Type *ty);
-int64_t const_expr(Token **rest, Token *tok);
+int32_t const_expr(Token **rest, Token *tok);
 Obj *parse(Token *tok);
 
 //

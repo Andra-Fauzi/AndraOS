@@ -124,9 +124,9 @@ static Node *compound_stmt(Token **rest, Token *tok);
 static Node *stmt(Token **rest, Token *tok);
 static Node *expr_stmt(Token **rest, Token *tok);
 static Node *expr(Token **rest, Token *tok);
-static int64_t eval(Node *node);
-static int64_t eval2(Node *node, char ***label);
-static int64_t eval_rval(Node *node, char ***label);
+static int32_t eval(Node *node);
+static int32_t eval2(Node *node, char ***label);
+static int32_t eval_rval(Node *node, char ***label);
 static bool is_const_expr(Node *node);
 static Node *assign(Token **rest, Token *tok);
 static Node *logor(Token **rest, Token *tok);
@@ -209,13 +209,13 @@ static Node *new_unary(NodeKind kind, Node *expr, Token *tok) {
   return node;
 }
 
-static Node *new_num(int64_t val, Token *tok) {
+static Node *new_num(int32_t val, Token *tok) {
   Node *node = new_node(ND_NUM, tok);
   node->val = val;
   return node;
 }
 
-static Node *new_long(int64_t val, Token *tok) {
+static Node *new_long(int32_t val, Token *tok) {
   Node *node = new_node(ND_NUM, tok);
   node->val = val;
   node->ty = ty_long;
@@ -1388,7 +1388,7 @@ static Node *lvar_initializer(Token **rest, Token *tok, Obj *var) {
   return new_binary(ND_COMMA, lhs, rhs, tok);
 }
 
-static uint64_t read_buf(char *buf, int sz) {
+static uint32_t read_buf(char *buf, int sz) {
   if (sz == 1)
     return *buf;
   if (sz == 2)
@@ -1396,11 +1396,11 @@ static uint64_t read_buf(char *buf, int sz) {
   if (sz == 4)
     return *(uint32_t *)buf;
   if (sz == 8)
-    return *(uint64_t *)buf;
+    return *(uint32_t *)buf;
   unreachable();
 }
 
-static void write_buf(char *buf, uint64_t val, int sz) {
+static void write_buf(char *buf, uint32_t val, int sz) {
   if (sz == 1)
     *buf = val;
   else if (sz == 2)
@@ -1408,7 +1408,7 @@ static void write_buf(char *buf, uint64_t val, int sz) {
   else if (sz == 4)
     *(uint32_t *)buf = val;
   else if (sz == 8)
-    *(uint64_t *)buf = val;
+    *(uint32_t *)buf = val;
   else
     unreachable();
 }
@@ -1430,10 +1430,10 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
           break;
 
         char *loc = buf + offset + mem->offset;
-        uint64_t oldval = read_buf(loc, mem->ty->size);
-        uint64_t newval = eval(expr);
-        uint64_t mask = (1L << mem->bit_width) - 1;
-        uint64_t combined = oldval | ((newval & mask) << mem->bit_offset);
+        uint32_t oldval = read_buf(loc, mem->ty->size);
+        uint32_t newval = eval(expr);
+        uint32_t mask = (1L << mem->bit_width) - 1;
+        uint32_t combined = oldval | ((newval & mask) << mem->bit_offset);
         write_buf(loc, combined, mem->ty->size);
       } else {
         cur = write_gvar_data(cur, init->children[mem->idx], mem->ty, buf,
@@ -1464,7 +1464,7 @@ write_gvar_data(Relocation *cur, Initializer *init, Type *ty, char *buf, int off
   }
 
   char **label = NULL;
-  uint64_t val = eval2(init->expr, &label);
+  uint32_t val = eval2(init->expr, &label);
 
   if (!label) {
     write_buf(buf + offset, val, ty->size);
@@ -1898,7 +1898,7 @@ static Node *expr(Token **rest, Token *tok) {
   return node;
 }
 
-static int64_t eval(Node *node) {
+static int32_t eval(Node *node) {
   return eval2(node, NULL);
 }
 
@@ -1908,7 +1908,7 @@ static int64_t eval(Node *node) {
 // is a pointer to a global variable and n is a postiive/negative
 // number. The latter form is accepted only as an initialization
 // expression for a global variable.
-static int64_t eval2(Node *node, char ***label) {
+static int32_t eval2(Node *node, char ***label) {
   add_type(node);
 
   if (is_flonum(node->ty))
@@ -1923,13 +1923,13 @@ static int64_t eval2(Node *node, char ***label) {
     return eval(node->lhs) * eval(node->rhs);
   case ND_DIV:
     if (node->ty->is_unsigned)
-      return (uint64_t)eval(node->lhs) / eval(node->rhs);
+      return (uint32_t)eval(node->lhs) / eval(node->rhs);
     return eval(node->lhs) / eval(node->rhs);
   case ND_NEG:
     return -eval(node->lhs);
   case ND_MOD:
     if (node->ty->is_unsigned)
-      return (uint64_t)eval(node->lhs) % eval(node->rhs);
+      return (uint32_t)eval(node->lhs) % eval(node->rhs);
     return eval(node->lhs) % eval(node->rhs);
   case ND_BITAND:
     return eval(node->lhs) & eval(node->rhs);
@@ -1941,7 +1941,7 @@ static int64_t eval2(Node *node, char ***label) {
     return eval(node->lhs) << eval(node->rhs);
   case ND_SHR:
     if (node->ty->is_unsigned && node->ty->size == 8)
-      return (uint64_t)eval(node->lhs) >> eval(node->rhs);
+      return (uint32_t)eval(node->lhs) >> eval(node->rhs);
     return eval(node->lhs) >> eval(node->rhs);
   case ND_EQ:
     return eval(node->lhs) == eval(node->rhs);
@@ -1949,11 +1949,11 @@ static int64_t eval2(Node *node, char ***label) {
     return eval(node->lhs) != eval(node->rhs);
   case ND_LT:
     if (node->lhs->ty->is_unsigned)
-      return (uint64_t)eval(node->lhs) < eval(node->rhs);
+      return (uint32_t)eval(node->lhs) < eval(node->rhs);
     return eval(node->lhs) < eval(node->rhs);
   case ND_LE:
     if (node->lhs->ty->is_unsigned)
-      return (uint64_t)eval(node->lhs) <= eval(node->rhs);
+      return (uint32_t)eval(node->lhs) <= eval(node->rhs);
     return eval(node->lhs) <= eval(node->rhs);
   case ND_COND:
     return eval(node->cond) ? eval2(node->then, label) : eval2(node->els, label);
@@ -1968,7 +1968,7 @@ static int64_t eval2(Node *node, char ***label) {
   case ND_LOGOR:
     return eval(node->lhs) || eval(node->rhs);
   case ND_CAST: {
-    int64_t val = eval2(node->lhs, label);
+    int32_t val = eval2(node->lhs, label);
     if (is_integer(node->ty)) {
       switch (node->ty->size) {
       case 1: return node->ty->is_unsigned ? (uint8_t)val : (int8_t)val;
@@ -2003,7 +2003,7 @@ static int64_t eval2(Node *node, char ***label) {
   error_tok(node->tok, "not a compile-time constant");
 }
 
-static int64_t eval_rval(Node *node, char ***label) {
+static int32_t eval_rval(Node *node, char ***label) {
   switch (node->kind) {
   case ND_VAR:
     if (node->var->is_local)
@@ -2057,7 +2057,7 @@ static bool is_const_expr(Node *node) {
   return false;
 }
 
-int64_t const_expr(Token **rest, Token *tok) {
+int32_t const_expr(Token **rest, Token *tok) {
   Node *node = conditional(rest, tok);
   return eval(node);
 }

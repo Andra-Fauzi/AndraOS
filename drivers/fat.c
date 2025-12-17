@@ -323,7 +323,7 @@ void list_root_dir() {
                 continue;
             }
 
-            // dapat atribut
+            // iapat atribut
             uint8_t attr = e->attr;
 
             // cek apakah folder
