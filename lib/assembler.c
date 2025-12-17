@@ -447,10 +447,10 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
         else {
             emit_u8(buf, 0xE8);
             int32_t diff = 0;
-            AsmLabel *l = find_label(op1.label_name);
             kprint("nama label : ", multiboot_info);
             kprint(op1.label_name, multiboot_info);
             kprint("\n", multiboot_info);
+            AsmLabel *l = find_label(op1.label_name);
             if (pass == 2) {
                 if (!l || !l->defined) {
                     kprint("undefined label :", multiboot_info);
