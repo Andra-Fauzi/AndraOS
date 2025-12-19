@@ -6,8 +6,11 @@ volatile uint8_t keyboard_buffer[KEYBOARD_BUFFER_SIZE];
 volatile uint32_t kb_tail = 0;
 volatile uint32_t kb_head = 0;
 
+extern multiboot_info_t* multiboot_info;
+
 void keyboard_callback(struct regs *r) {
 
+	/*
 	uint8_t status = inb(0x64);
 
 	if(status & 0x01) {
@@ -21,6 +24,17 @@ void keyboard_callback(struct regs *r) {
 		}
 	}
 	send_eoi(1);
+	*/
+	uint8_t sc = inb(0x60);
+	if(!(sc & 0x80))
+	{
+		uint32_t next = (kb_head + 1) % KEYBOARD_BUFFER_SIZE;
+		if(next != kb_tail) {
+		keyboard_buffer[kb_head] = sc;
+		kb_head = next;
+		}
+	}
+	lapic_eoi();
 }
 
 int keyboard_getchar() {
@@ -34,4 +48,5 @@ int keyboard_getchar() {
 
 void init_keyboard() {
 	register_irq_handler(1, keyboard_callback);
+	ioapic_enable_keyboard();
 }

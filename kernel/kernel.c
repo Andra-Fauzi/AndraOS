@@ -17,6 +17,7 @@
 #include "scheduler.h"
 #include "fat.h"
 #include "userland.h"
+#include "apic.h"
 
 #if defined(__linux__)
 #error "You are not using cross compiler you will run to some trouble"
@@ -122,6 +123,7 @@ void kernel_main(multiboot_info_t *mb_info) {
 	isr_install();
 	heap_init();
 	irq_install();
+	init_apic();
 	asm volatile("sti");
 	//initTasking();
 	//init_paging();

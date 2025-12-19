@@ -4,5 +4,6 @@
 #include "terminal.h"
 #include "keyboard_map.h"
 #include "pic.h"
+#include "apic.h"
 
 int keyboard_getchar();
