@@ -5,6 +5,7 @@
 //uint32_t VGA_HEIGHT = 0;
 
 extern uint32_t framebuffer_address;
+extern multiboot_info_t* multiboot_info;
 
 int32_t terminal_x = 0;
 int32_t terminal_y = 0;
@@ -340,15 +341,19 @@ void terminal_init(multiboot_info_t *mb_info) {
 
 #ifdef FONT8X8
 #define CHAR_SIZE 8
-#define SCALE 1
+#define SCALE 2
 #define CHAR_WIDTH (CHAR_SIZE * SCALE)
 #define CHAR_HEIGHT (CHAR_SIZE * SCALE)
+#define FONT_H 8
+#define FONT_W 8
 #endif
 #ifdef FONT8X16
 #define CHAR_SIZE 8
-#define SCALE 1
-#define CHAR_WIDTH (CHAR_SIZE * SCALE)
-#define CHAR_HEIGHT ((CHAR_SIZE * 2) * SCALE)
+#define SCALE 2
+#define CHAR_WIDTH 8 * SCALE
+#define CHAR_HEIGHT 16 * SCALE
+#define FONT_H 16
+#define FONT_W 8
 #endif
 
 void scroll_framebuffer(multiboot_info_t *mb_info) {
@@ -433,8 +438,8 @@ void print_char(char c, multiboot_info_t *mb_info) {
             #endif
 	
 
-    		for (int y = 0; y < CHAR_HEIGHT; y++) {
-        		for (int x = 0; x < CHAR_WIDTH; x++) {
+    		for (int y = 0; y < FONT_H; y++) {
+        		for (int x = 0; x < FONT_W; x++) {
                     #ifdef FONT8X16
             			if (bitmap[y] & (1 << (7-x))) {
                 			for (int dy = 0; dy < SCALE; dy++) {

@@ -18,6 +18,7 @@
 #include "fat.h"
 #include "userland.h"
 #include "apic.h"
+#include "PCI.h"
 
 #if defined(__linux__)
 #error "You are not using cross compiler you will run to some trouble"
@@ -27,60 +28,11 @@
 #error "this kernel need compile with ix86-elf compiler"
 #endif
 
+// old deprecated VGA not using this anymore
 //#define VGA_WIDTH 80
 //#define VGA_HEIGHT 25
 //#define VGA_MEMORY 0XB8000
 
-void draw_fullscreen(multiboot_info_t *mb_info) {
-    if (!mb_info || mb_info->framebuffer_addr == 0) {
-        return;
-    }
-
-    uint8_t bpp = mb_info->framebuffer_bpp;
-    uint32_t pitch = mb_info->framebuffer_pitch;
-    uint32_t width = mb_info->framebuffer_width;
-    uint32_t height = mb_info->framebuffer_height;
-    uintptr_t fb_addr = (uintptr_t) mb_info->framebuffer_addr;
-
-    /* contoh: fill blue then red rectangle */
-    if (bpp == 32) {
-        uint32_t *fb = (uint32_t *) fb_addr;
-        uint32_t pitch_pixels = pitch / 4;
-        /* fill blue */
-        for (uint32_t y = 0; y < height; y++) {
-            for (uint32_t x = 0; x < width; x++) {
-                fb[y * pitch_pixels + x] = 0x000000FF; /* 0x00RRGGBB little-endian = Blue */
-            }
-        }
-        /* draw red rectangle 50..100,50..150 */
-        for (uint32_t y = 50; y < 100 && y < height; y++) {
-            for (uint32_t x = 50; x < 150 && x < width; x++) {
-                fb[y * pitch_pixels + x] = 0x00FF0000; /* Red */
-            }
-        }
-    } else if (bpp == 24) {
-        uint8_t *fb = (uint8_t *) fb_addr;
-        for (uint32_t y = 0; y < height; y++) {
-            uint8_t *row = fb + y * pitch;
-            for (uint32_t x = 0; x < width; x++) {
-                uint8_t *pix = row + x * 3;
-                pix[0] = 0xFF; /* Blue */
-                pix[1] = 0x00; /* Green */
-                pix[2] = 0x00; /* Red  => blue color because BGR order in many implementations */
-            }
-        }
-        /* rectangle */
-        for (uint32_t y = 50; y < 100 && y < height; y++) {
-            uint8_t *row = fb + y * pitch;
-            for (uint32_t x = 50; x < 150 && x < width; x++) {
-                uint8_t *pix = row + x * 3;
-                pix[0] = 0x00; pix[1] = 0x00; pix[2] = 0xFF; /* Red if RGB order, or adjust if BGR */
-            }
-        }
-    } else {
-        /* jenis framebuffer lain atau paletted; kamu harus tangani sesuai framebuffer_type */
-    }
-}
 
 multiboot_info_t *multiboot_info;
 
@@ -165,6 +117,9 @@ void kernel_main(multiboot_info_t *mb_info) {
 	kprint(buffer_s, multiboot_info);
 	kprint("\n", multiboot_info);
 	// switchToUserland();
+	kprint("test network\n", multiboot_info);
+	pci_scan_RTL8139();
+	kprint("\n", multiboot_info);
 	for (;;) {
 		shell_run(multiboot_info);
 		asm volatile("hlt");

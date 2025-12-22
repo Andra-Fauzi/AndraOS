@@ -65,6 +65,10 @@ run-disk:
 run-disk-debug:
 	sudo bash insert_kernel.sh
 	qemu-system-i386 -drive format=raw,file=disk.img -monitor stdio -no-reboot -no-shutdown -d cpu_reset -D qemu.log -s -S
+run-disk-network:
+	sudo bash insert_kernel.sh
+	qemu-system-i386 -drive format=raw,file=disk.img -netdev user,id=net0 -device rtl8139,netdev=net0 -monitor stdio
+
 clean:
 	@echo "[CLEAN]"
 	rm -rf obj $(TARGET) $(ISO)
