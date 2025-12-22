@@ -2,6 +2,6 @@
 
 extern uint16_t active_cluster;
 
-void c_ls(char *buffer, int length, multiboot_info_t * mb_info) {
+void c_ls(char *buffer, int length) {
 	list_dir(active_cluster);
 }

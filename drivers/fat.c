@@ -89,58 +89,58 @@ void init_fat16() {
 	total_sectors = boot_record.total_sector_16;
 	
 	to_string(total_sectors, buffer1);
-	kprint("total_sectors: ", multiboot_info);
-	kprint(buffer1, multiboot_info);
-	print_char('\n', multiboot_info);
+	kprint("total_sectors: ");
+	kprint(buffer1);
+	print_char('\n');
 	
 	fat_size = boot_record.table_size_16;
 
 	to_string(fat_size, buffer1);
-	kprint("fat_size: ", multiboot_info);
-	kprint(buffer1, multiboot_info);
-	print_char('\n', multiboot_info);
+	kprint("fat_size: ");
+	kprint(buffer1);
+	print_char('\n');
 
 	root_dir_sectors = ((boot_record.root_entry_count * 32) + (boot_record.bytes_per_sector - 1)) / boot_record.bytes_per_sector;
 
 	to_string(root_dir_sectors, buffer1);
-	kprint("root_dir_sectors: ", multiboot_info);
-	kprint(buffer1, multiboot_info);
-	print_char('\n', multiboot_info);
+	kprint("root_dir_sectors: ");
+	kprint(buffer1);
+	print_char('\n');
 
 	first_data_sectors = boot_record.reserved_sector_count + (boot_record.table_count * fat_size) + root_dir_sectors;
 	
 	to_string(first_data_sectors, buffer1);
-	kprint("first_data_sectors: ", multiboot_info);
-	kprint(buffer1, multiboot_info);
-	print_char('\n', multiboot_info);
+	kprint("first_data_sectors: ");
+	kprint(buffer1);
+	print_char('\n');
 
 	first_fat_sector = boot_record.reserved_sector_count;
 	
 	to_string(first_fat_sector, buffer1);
-	kprint("first_fat_sector: ", multiboot_info);
-	kprint(buffer1, multiboot_info);
-	print_char('\n', multiboot_info);
+	kprint("first_fat_sector: ");
+	kprint(buffer1);
+	print_char('\n');
 
 	data_sectors = total_sectors - (boot_record.reserved_sector_count + (boot_record.table_count * fat_size) + root_dir_sectors);
 	
 	to_string(data_sectors, buffer1);
-	kprint("data_sectors: ", multiboot_info);
-	kprint(buffer1, multiboot_info);
-	print_char('\n', multiboot_info);
+	kprint("data_sectors: ");
+	kprint(buffer1);
+	print_char('\n');
 
 	total_clusters = data_sectors / boot_record.sector_per_cluster;
 	
 	to_string(total_clusters, buffer1);
-	kprint("total_clusters: ", multiboot_info);
-	kprint(buffer1, multiboot_info);
-	print_char('\n', multiboot_info);
+	kprint("total_clusters: ");
+	kprint(buffer1);
+	print_char('\n');
 
 	first_root_dir_sector = boot_record.reserved_sector_count + (boot_record.table_count * fat_size);
 
 	to_string(first_root_dir_sector, buffer1);
-	kprint("first_root_dir_sector: ", multiboot_info);
-	kprint(buffer1, multiboot_info);
-	print_char('\n', multiboot_info);
+	kprint("first_root_dir_sector: ");
+	kprint(buffer1);
+	print_char('\n');
 }
 
 uint16_t readFATTable(uint16_t active_cluster) {
@@ -205,11 +205,11 @@ void readFATuntilEOC(uint16_t active_cluster) {
 		for(int i = 0;boot_record.sector_per_cluster; i++)
 		{
 			ata_read_sector(2048 + lba, (uint8_t*)buffer);
-			kprint(buffer, multiboot_info);
+			kprint(buffer);
 		}
 		table_value = readFATTable(active_cluster);
 	}
-	print_char('\n', multiboot_info);
+	print_char('\n');
 }
 
 void readFATuntil10(uint16_t active_cluster) {
@@ -219,20 +219,20 @@ void readFATuntil10(uint16_t active_cluster) {
 	while(!(table_value >= 0xFFF8 || i > 10)) {
 		uint32_t lba = cluster_to_LBA(table_value);
 		ata_read_sector(2048 + lba, (uint8_t*)buffer);
-		kprint(buffer, multiboot_info);
+		kprint(buffer);
 		table_value = readFATTable(active_cluster);
 		i++;
 	}
-	print_char('\n', multiboot_info);
+	print_char('\n');
 }
 
 void list_dir(uint16_t active_cluster) {
-    kprint("Listing Directory for cluster:\n", multiboot_info);
+    kprint("Listing Directory for cluster:\n");
     char buffer[20];
     to_string(active_cluster, buffer);
-    kprint("Cluster: ", multiboot_info);
-    kprint(buffer, multiboot_info);
-    print_char('\n', multiboot_info);
+    kprint("Cluster: ");
+    kprint(buffer);
+    print_char('\n');
 
     if (active_cluster < 2) {
         // Root directory
@@ -281,30 +281,30 @@ void list_dir(uint16_t active_cluster) {
 
             // print (atau kprint di OS kamu)
             if (is_dir) {
-                kprint("[DIR] ", multiboot_info);
+                kprint("[DIR] ");
             } else {
-                kprint("[FILE] ", multiboot_info);
+                kprint("[FILE] ");
             }
-            kprint(name, multiboot_info);
+            kprint(name);
 
             char bufnum[20];
             to_string(first_cluster, bufnum);
-            kprint(" clst=", multiboot_info);
-            kprint(bufnum, multiboot_info);
+            kprint(" clst=");
+            kprint(bufnum);
             to_string(size, bufnum);
-            kprint(" size=", multiboot_info);
-            kprint(bufnum, multiboot_info);
-            print_char('\n', multiboot_info);
+            kprint(" size=");
+            kprint(bufnum);
+            print_char('\n');
         }
     }
 }
 
 void list_root_dir() {
-    kprint("Listing Root Directory:\n", multiboot_info);
+    kprint("Listing Root Directory:\n");
     uint8_t buf[512];
     uint32_t entries_per_sector = boot_record.bytes_per_sector / sizeof(fat_dir_entry_t);
     for (uint32_t s = 0; s < root_dir_sectors; s++) {
-        kprint("Reading sector: \n", multiboot_info);
+        kprint("Reading sector: \n");
         ata_read_sector(2048 + first_root_dir_sector + s, buf);
         fat_dir_entry_t *entries = (fat_dir_entry_t *)buf;
 
@@ -340,22 +340,22 @@ void list_root_dir() {
 
             // print (atau kprint di OS kamu)
             if (is_dir) {
-                kprint("[DIR] ", multiboot_info);
+                kprint("[DIR] ");
             } else {
-                kprint("[FILE] ", multiboot_info);
+                kprint("[FILE] ");
             }
-            kprint(name, multiboot_info);
+            kprint(name);
 
             char bufnum[20];
             to_string(first_cluster, bufnum);
-            kprint(" clst=", multiboot_info);
-            kprint(bufnum, multiboot_info);
+            kprint(" clst=");
+            kprint(bufnum);
 
             to_string(size, bufnum);
-            kprint(" size=", multiboot_info);
-            kprint(bufnum, multiboot_info);
+            kprint(" size=");
+            kprint(bufnum);
 
-            print_char('\n', multiboot_info);
+            print_char('\n');
         }
     }
 }
@@ -466,9 +466,9 @@ int find_cluster_dir(uint16_t cluster, char *name, int length) {
             }
         } 
     }
-    kprint("not found: ", multiboot_info);
-    kprint(upper_name, multiboot_info);
-    print_char('\n', multiboot_info);
+    kprint("not found: ");
+    kprint(upper_name);
+    print_char('\n');
     return -1;
 }
 
@@ -515,9 +515,9 @@ void create_entry(fat_dir_entry_t entry, uint16_t cluster) {
     char buffer[sizeof(fat_dir_entry_t)];
     char buffer1[512];
     to_string(cluster_real, buffer1);
-    kprint("cluster untuk entri ini ada di :", multiboot_info);
-    kprint(buffer1, multiboot_info);
-    print_char('\n', multiboot_info);
+    kprint("cluster untuk entri ini ada di :");
+    kprint(buffer1);
+    print_char('\n');
     entry.first_cluster_lo = cluster_real;
     memcpy(buffer, &entry, sizeof(fat_dir_entry_t));
     uint32_t lba = cluster_to_LBA(cluster);
@@ -627,9 +627,9 @@ int find_cluster(uint16_t cluster, char name[11]) {
             }
         } 
     }
-    kprint("not found: ", multiboot_info);
-    kprint(upper_name, multiboot_info);
-    print_char('\n', multiboot_info);
+    kprint("not found: ");
+    kprint(upper_name);
+    print_char('\n');
     return -1;
 }
 
@@ -717,10 +717,10 @@ fat_dir_entry_t get_entry_file(uint16_t cluster, char name[11]) {
             }
         } 
     }
-    print_char('\n', multiboot_info);
-    kprint("not found: ", multiboot_info);
-    kprint(upper_name, multiboot_info);
-    print_char('\n', multiboot_info);
+    print_char('\n');
+    kprint("not found: ");
+    kprint(upper_name);
+    print_char('\n');
 }
 
 uint8_t *readfile(uint16_t active_cluster, char real_name[12], int *out_size) {
@@ -729,16 +729,16 @@ uint8_t *readfile(uint16_t active_cluster, char real_name[12], int *out_size) {
 	to_fat_name_fixed(real_name, name);
 	int cluster = find_cluster(active_cluster, name);
 	if(cluster == -1) {
-		kprint("tidak ditemukan\n", multiboot_info);
+		kprint("tidak ditemukan\n");
 		if (out_size) *out_size = 0;
 		return NULL;
 	}
 	fat_dir_entry_t entry = get_entry_file(active_cluster, name);
 	char buffer[512];
-	kprint("besar filenya :", multiboot_info);
+	kprint("besar filenya :");
 	to_string(entry.file_size, buffer);
-	kprint(buffer, multiboot_info);
-	kprint("\n", multiboot_info);
+	kprint(buffer);
+	kprint("\n");
 	char *file = (char *)malloc(entry.file_size);
 	int size = 0;
 	uint16_t table_value = entry.first_cluster_lo;
@@ -868,7 +868,7 @@ void writefile(uint16_t parent_cluster, const char *name, void *buffer, uint32_t
     // But to match previous logic without VLA:
     uint16_t *allocated_clusters = (uint16_t*)malloc(num_clusters * sizeof(uint16_t));
     if (!allocated_clusters) {
-         kprint("Writefile: malloc failed\n", multiboot_info);
+         kprint("Writefile: malloc failed\n");
          return;
     }
     
@@ -878,7 +878,7 @@ void writefile(uint16_t parent_cluster, const char *name, void *buffer, uint32_t
     for (uint32_t i = 0; i < num_clusters; i++) {
         uint16_t current_cluster = find_free_cluster();
         if (current_cluster == 0xFFFF) {
-            kprint("Disk Full, rollback\n", multiboot_info);
+            kprint("Disk Full, rollback\n");
             // rollback
             for (uint32_t j = 0; j < i; j++) writeFATTable(allocated_clusters[j], 0x0000);
             // free(allocated_clusters); // if we had free

@@ -115,9 +115,9 @@ void pci_scan_RTL8139() {
         }
     }
     if(found == true) {
-	    kprint("dapat nih network\n", multiboot_info);
+	    kprint("dapat nih network\n");
     } else {
-	    kprint("yah ga dapat nih network\n", multiboot_info);
+	    kprint("yah ga dapat nih network\n");
 	    return;
     }
 
@@ -141,7 +141,7 @@ void pci_scan_RTL8139() {
 	    mac[i] = inb(rtl_io_base + i);
     }
 
-    kprint("mac address cihuyyy\n", multiboot_info);
+    kprint("mac address cihuyyy\n");
 
     for(int i = 0; i < 6; i++) {
 	    /*
@@ -152,13 +152,14 @@ void pci_scan_RTL8139() {
 	    	kprint(":", multiboot_info);
 	    }
 	*/
-	kprint_hex(mac[i], multiboot_info);
+	kprint_hex(mac[i]);
 	if(i < 5) {
-	    kprint(":", multiboot_info);
+	    kprint(":");
 	}
     }
-	    kprint("\n", multiboot_info);
+	    kprint("\n");
 	#define RX_BUF_SIZE (8192 + 16 + 1500)
+	    /*
 	uint8_t rtl_rx_buffer[RX_BUF_SIZE] __attribute__((aligned(16)));
 	outl(rtl_io_base + 0x30, (uint32_t)rtl_rx_buffer);
 	outl(rtl_io_base + 0x44, 0x0000000F);
@@ -193,4 +194,5 @@ void pci_scan_RTL8139() {
 	outl(rtl_io_base + 0x10 + tx_cur*4, (uint32_t)length);
 
 	tx_cur = (tx_cur + 1) % 4;
+	*/
 }

@@ -64,18 +64,22 @@ void kernel_main(multiboot_info_t *mb_info) {
 	}
 
 	// Update framebuffer address to use the mapped virtual address
-	multiboot_info->framebuffer_addr = fb_virt;
 	framebuffer_address = fb_virt;
 
-	kprint("halo", multiboot_info);
-	
 	//multiboot_info = mb_info;
+	kprint("Init GDT\n");
 	gdt_install();
+	kprint("Init IDT\n");
 	idt_install();
+	kprint("Init ISR\n");
 	isr_install();
+	kprint("Init HEAP\n");
 	heap_init();
+	kprint("Init IRQ\n");
 	irq_install();
+	kprint("Init APIC\n");
 	init_apic();
+	kprint("Enable Interrupt\n");
 	asm volatile("sti");
 	//initTasking();
 	//init_paging();
@@ -84,44 +88,20 @@ void kernel_main(multiboot_info_t *mb_info) {
 	extern void init_keyboard();
 	extern void init_timer(uint32_t frequency);
 
+	kprint("Init Keyboard\n");
 	init_keyboard();
-	kprint("After keyboard init\n", multiboot_info);
+	kprint("Init Timer\n");
 	init_timer(10);
-	kprint("After timer init\n", multiboot_info);
 
-
+	kprint("Init Shell\n");
+	init_shell();
 	
-	init_shell(multiboot_info);
-	
+	kprint("Init FAT16\n");
 	init_fat16();
-	kprint("After FAT init\n", multiboot_info);
-	
-	kprint("test cpuid\n", multiboot_info);
-
-	uint32_t cpuid_b;
-	uint32_t cpuid_c;
-	uint32_t cpuid_d;
-	asm volatile("mov $0x0, %eax");
-	asm volatile("cpuid");
-	asm volatile("mov %%ebx, %0" : "=r"(cpuid_b));
-	asm volatile("mov %%edx, %0" : "=r"(cpuid_d));
-	asm volatile("mov %%ecx, %0" : "=r"(cpuid_c));
-
-	char buffer_s[13];
-	*(unsigned int *)buffer_s = cpuid_b;
-	*(unsigned int *)(buffer_s + 4) = cpuid_d;
-	*(unsigned int *)(buffer_s + 8) = cpuid_c;
-	buffer_s[12] = '\0';
-
-	kprint("\n", multiboot_info);
-	kprint(buffer_s, multiboot_info);
-	kprint("\n", multiboot_info);
-	// switchToUserland();
-	kprint("test network\n", multiboot_info);
+	kprint("test network\n");
 	pci_scan_RTL8139();
-	kprint("\n", multiboot_info);
 	for (;;) {
-		shell_run(multiboot_info);
+		shell_run();
 		asm volatile("hlt");
 		//kprint("main task running\n", multiboot_info);
 		//sleep_ms(1000);

@@ -7,16 +7,18 @@ char current_dir[255];
 command_args_t args[10];
 int args_count = 0;
 
+extern multiboot_info_t* multiboot_info;
 
-void add_args(char *name, void (*function)(char *, int, multiboot_info_t *), int length_command) {
+
+void add_args(char *name, void (*function)(char *, int), int length_command) {
 	args[args_count].length_command = length_command;
 	args[args_count].function = function;
 	memcpy(args[args_count].name, name, length_command);
 	args_count++;
 }
 
-void init_shell(multiboot_info_t *mb_info) {
-	clear_screen(mb_info);
+void init_shell() {
+	clear_screen();
 	memset(current_dir, 0, sizeof(current_dir));
 	current_dir[0] = 'r';
 	current_dir[1] = 'o';
@@ -56,7 +58,7 @@ int cmp(char* source, char* destination) {
 	}
 	return cmp;
 }
-char* read_input(multiboot_info_t *mb_info) {
+char* read_input() {
 	static char buffer[512];
 	int length = 0;
 	char character;
@@ -71,7 +73,7 @@ char* read_input(multiboot_info_t *mb_info) {
 		if(character) {
 			buffer[length] = character;
 			length++;
-			print_char(character, mb_info);
+			print_char(character);
 		}
 		if(character == '\n') {
 			buffer[length] = '\0';
@@ -81,7 +83,7 @@ char* read_input(multiboot_info_t *mb_info) {
 	return buffer;
 }
 
-void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
+void execute_command(char* buffer, int length) {
 	if(length == 0) {
 		return;
 	}
@@ -90,24 +92,24 @@ void execute_command(char* buffer, int length, multiboot_info_t *mb_info) {
 	bool found = false;
 	for(int i = 0; i < args_count; i++) {
 		if((memcmp(args[i].name, command_args[0], args[i].length_command)) == 0) {
-			args[i].function(buffer, length, mb_info);
+			args[i].function(buffer, length);
 			found = true;
 			break;
 		}
 	}
 
 	if(found == false) {
-		kprint("command not found try help\n", mb_info);
+		kprint("command not found try help\n");
 	}
 }
 
-void shell_run(multiboot_info_t *mb_info) {
+void shell_run() {
 	if(shell_mode == false) {
 		return;
 	}
 	if(terminal_x < 1 && terminal_y) {
-		kprint(current_dir, mb_info);
-		print_char('>', mb_info);
+		kprint(current_dir);
+		print_char('>');
 	}
 	char character;
 	while((character = shell_getchar()) == -1) {
@@ -116,20 +118,20 @@ void shell_run(multiboot_info_t *mb_info) {
 	if (character == '\b' && length_command > 0) {
 		command_buffer[length_command] = 0;
 		length_command--;
-		print_char(character, mb_info);
+		print_char(character);
 	} 
 	else if(character == '\n') {
-		print_char(character, mb_info);
-		execute_command(command_buffer, length_command, mb_info);
+		print_char(character);
+		execute_command(command_buffer, length_command);
 		while(length_command > 0) {
 			command_buffer[length_command] = 0;
 			length_command--;
 		}
-		kprint(current_dir, mb_info);
-		print_char('>', mb_info);
+		kprint(current_dir);
+		print_char('>');
 	}
 	else if(character != '\b' && character != '\n') {
-		print_char(character, mb_info);
+		print_char(character);
 		command_buffer[length_command] = character;
 		length_command++;
 	}

@@ -21,10 +21,10 @@ void *load_elf(uint16_t cluster, char name[12]) {
 
 	uint32_t alloc_test = alloc_page();
 
-	kprint("\n", multiboot_info);
-	kprint("test alloc : ", multiboot_info);
-	kprint_hex(alloc_test, multiboot_info);
-	kprint("\n", multiboot_info);
+	("\n");
+	kprint("test alloc : ");
+	kprint_hex(alloc_test);
+	kprint("\n");
 
     for(int i = 0; i < eh->e_phnum; i++) {
 	    if(ph[i].p_type != 1) continue;
@@ -46,15 +46,15 @@ void *load_elf(uint16_t cluster, char name[12]) {
     }
     
     // Debug info
-    kprint("entry: ", multiboot_info);
-    kprint_hex((uintptr_t)eh->e_entry, multiboot_info);
-    print_char('\n', multiboot_info);
+    kprint("entry: ");
+    kprint_hex((uintptr_t)eh->e_entry);
+    print_char('\n');
 
     return (void*)eh->e_entry;
 }
 
 
-void c_elf(char *buffer, int length, multiboot_info_t *mb_info) {
+void c_elf(char *buffer, int length) {
 	asm volatile("cli");
 	char buffer_s[512];
 	char command_args[3][128];

@@ -10,12 +10,12 @@ extern void switch_to_userland(uint32_t entry, uint32_t stack);
 // Setup syscall interrupt
 void init_userland() {
     // idt_set_gate(0x80, (uint32_t)syscall_stub, 0x08, 0xEE);
-    kprint("Syscall handler installed at INT 0x80\n", multiboot_info);
+    kprint("Syscall handler installed at INT 0x80\n");
 }
 
 // Main userland switch function
 void switchToUserland() {
-    kprint("=== USERLAND SETUP START ===\n", multiboot_info);
+    kprint("=== USERLAND SETUP START ===\n");
     
     // Define user space virtual addresses (must be < 0xC0000000)
     #define USER_CODE_VIRT  0x00400000  // 4MB mark - standard for user programs
@@ -24,7 +24,7 @@ void switchToUserland() {
     // 1. Allocate physical pages for user code
     uint32_t phys_code_page = alloc_page();
     if (phys_code_page == 0) {
-        kprint("ERROR: Code page allocation failed\n", multiboot_info);
+        kprint("ERROR: Code page allocation failed\n");
         return;
     }
     uint32_t phys_code = phys_code_page - KERNEL_BASE;  // Convert to physical
@@ -33,7 +33,7 @@ void switchToUserland() {
     uint32_t phys_stack_page1 = alloc_page();
     uint32_t phys_stack_page2 = alloc_page();
     if (phys_stack_page1 == 0 || phys_stack_page2 == 0) {
-        kprint("ERROR: Stack allocation failed\n", multiboot_info);
+        kprint("ERROR: Stack allocation failed\n");
         return;
     }
     uint32_t phys_stack1 = phys_stack_page1 - KERNEL_BASE;
@@ -57,17 +57,17 @@ void switchToUserland() {
     code[10] = 0xCD; code[11] = 0x80;                                               // int 0x80
     code[12] = 0xEB; code[13] = 0xF2;                                               // jmp $ (infinite loop)
     
-    kprint("User code virtual addr: ", multiboot_info);
-    kprint_hex(USER_CODE_VIRT, multiboot_info);
-    kprint("\nUser code physical addr: ", multiboot_info);
-    kprint_hex(phys_code, multiboot_info);
-    kprint("\nUser stack virtual addr: ", multiboot_info);
-    kprint_hex(USER_STACK_VIRT + 8192 - 4, multiboot_info);
-    kprint("\n=== SWITCHING TO USERLAND ===\n", multiboot_info);
+    kprint("User code virtual addr: ");
+    kprint_hex(USER_CODE_VIRT);
+    kprint("\nUser code physical addr: ");
+    kprint_hex(phys_code);
+    kprint("\nUser stack virtual addr: ");
+    kprint_hex(USER_STACK_VIRT + 8192 - 4);
+    kprint("\n=== SWITCHING TO USERLAND ===\n");
     
     // 6. Switch to userland using USER SPACE addresses
     switch_to_userland(USER_CODE_VIRT, USER_STACK_VIRT + 8192 - 4);
     
     // Never returns
-    kprint("ERROR: Returned from userland!\n", multiboot_info);
+    kprint("ERROR: Returned from userland!\n");
 }

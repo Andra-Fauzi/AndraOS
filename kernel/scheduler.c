@@ -7,7 +7,7 @@ volatile Task thirdTask;
 volatile bool ismultitasking = false;
 
 void secondMain() {
-	kprint("Hello multitasking world!", multiboot_info);
+	kprint("Hello multitasking world!");
 	while(1) {
 		// kprint("task 2 running!\n", multiboot_info);
 		// Timer interrupt will switch tasks automatically
@@ -19,7 +19,7 @@ void secondMain() {
 }
 
 void thirdMain() {
-    kprint("Hello multitasking world!", multiboot_info);
+    kprint("Hello multitasking world!");
     
 	while(1) {
 		// kprint("task 3 running!\n", multiboot_info);

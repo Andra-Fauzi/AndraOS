@@ -34,4 +34,4 @@ typedef struct {
 } Elf32_Phdr;
 
 void *load_elf(uint16_t cluster, char name[12]);
-void c_elf(char *buffer, int length, multiboot_info_t *mb_info);
+void c_elf(char *buffer, int length);

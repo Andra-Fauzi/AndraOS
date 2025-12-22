@@ -221,14 +221,14 @@ int subc_compile(char *src, int src_len, char *dest, size_t dest_max, size_t *de
     extern uint8_t *readfile(uint16_t active_cluster, char name[12], int *out_size);
     extern void writefile(uint16_t parent_cluster, const char *name, void *buffer, uint32_t size);
 
-    kprint("hasil buffer : \n", multiboot_info);
-    kprint(asm_buffer, multiboot_info);
-    print_char('\n', multiboot_info);
-    kprint("panjang buffer : \n", multiboot_info);
+    kprint("hasil buffer : \n");
+    kprint(asm_buffer);
+    print_char('\n');
+    kprint("panjang buffer : \n");
     char len_str[255];
     to_string(asm_len, len_str);
-    kprint(len_str, multiboot_info);
-    print_char('\n', multiboot_info);
+    kprint(len_str);
+    print_char('\n');
 
     char name[11];
     to_fat_name_fixed("coba.asm\0", name);

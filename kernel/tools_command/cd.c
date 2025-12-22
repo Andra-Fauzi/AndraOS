@@ -3,13 +3,13 @@
 extern uint16_t active_cluster;
 extern char current_dir[255];
 
-void c_cd(char *buffer, int length, multiboot_info_t *mb_info) {
+void c_cd(char *buffer, int length) {
 	char command_args[3][128];
 	substr(buffer, ' ', length, command_args);
 	if(command_args[1][0] != '\0') {
 		int hasil = find_cluster_dir(active_cluster, command_args[1], length-3);
 		if(hasil == -1) {
-			kprint("folder tidak di temukan\n", mb_info);
+			kprint("folder tidak di temukan\n");
 		}
 		else if(memcmp(command_args[1], "..", 2) == 0) {
 			active_cluster = hasil;

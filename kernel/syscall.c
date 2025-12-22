@@ -17,7 +17,7 @@ void syscall_handler(struct regs *r) {
         case 1: // print char (ebx = char)
             {
                 char c = (char)r->ebx;
-                print_char(c, multiboot_info);
+                print_char(c);
             }
             break;
 	 case 2:
@@ -43,11 +43,11 @@ void syscall_handler(struct regs *r) {
 		    uint32_t x = r->ebx;
 		    uint32_t y = r->ecx;
 		    uint32_t color = 0xFFFFFFFF;
-		    draw_pixel(multiboot_info, x, y, color);
+		    draw_pixel(x, y, color);
 	    }
 	    break;
         default:
-            kprint("Unknown syscall\n", multiboot_info);
+            kprint("Unknown syscall\n");
             break;
     }
     //kprint("\nsyscall called\n", multiboot_info);

@@ -44,5 +44,5 @@ void isr_handler(struct regs *r) {
 		syscall_handler(r);
 		return;
 	}
-	kprint("interrupt terjadi", multiboot_info);
+	kprint("interrupt terjadi");
 }

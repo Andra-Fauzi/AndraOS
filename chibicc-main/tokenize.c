@@ -48,7 +48,7 @@ static void verror_at(char *filename, char *input, int line_no,
   //fprintf(stderr, "^ ");
   chi_vprintf(stderr, fmt, ap);
   chi_printf(stderr, "\n");
-  kprint(stderr->buf, multiboot_info);
+  kprint(stderr->buf);
 }
 
 void error_at(char *loc, char *fmt, ...) {

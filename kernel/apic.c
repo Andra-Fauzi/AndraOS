@@ -103,9 +103,9 @@ static inline uint32_t ioapic_read(uint8_t reg) {
 void init_apic() {
 	asm volatile("cli");
 	if(check_apic()) {
-		kprint("apic support\n", multiboot_info);
+		kprint("apic support\n");
 	} else {
-		kprint("apic is not supported\n", multiboot_info);
+		kprint("apic is not supported\n");
 		return;
 	}
 	uintptr_t apic_phys = cpu_get_apic_base();

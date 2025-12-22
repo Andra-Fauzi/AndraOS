@@ -10,6 +10,26 @@ extern multiboot_info_t* multiboot_info;
 int32_t terminal_x = 0;
 int32_t terminal_y = 0;
 
+#define FONT8X16
+
+#ifdef FONT8X8
+#define CHAR_SIZE 8
+#define SCALE 1
+#define CHAR_WIDTH (CHAR_SIZE * SCALE)
+#define CHAR_HEIGHT (CHAR_SIZE * SCALE)
+#define FONT_H 8
+#define FONT_W 8
+#endif
+#ifdef FONT8X16
+#define CHAR_SIZE 8
+#define SCALE 1
+#define CHAR_WIDTH 8 * SCALE
+#define CHAR_HEIGHT 16 * SCALE
+#define FONT_H 16
+#define FONT_W 8
+#endif
+
+
 char font8x8_basic[128][8] = {
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0000 (nul)
     { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},   // U+0001
@@ -272,11 +292,11 @@ unsigned char font8x16_basic[][16] = {
         { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  },       //0x7F, delete
     };
 
-void draw_pixel(multiboot_info_t *mb_info, int x, int y, uint32_t color) {
-    uint8_t bpp = mb_info->framebuffer_bpp;
-    uint32_t pitch = mb_info->framebuffer_pitch;
-    uint32_t width = mb_info->framebuffer_width;
-    uint32_t height = mb_info->framebuffer_height;
+void draw_pixel(int x, int y, uint32_t color) {
+    uint8_t bpp = multiboot_info->framebuffer_bpp;
+    uint32_t pitch = multiboot_info->framebuffer_pitch;
+    uint32_t width = multiboot_info->framebuffer_width;
+    uint32_t height = multiboot_info->framebuffer_height;
     uintptr_t fb_addr = (uintptr_t) framebuffer_address;
     uint32_t *fb = (uint32_t *) fb_addr;
     uint32_t pitch_pixels = pitch / 4;
@@ -303,14 +323,14 @@ void clear_line(int line) {
 }
 */
 
-void clear_screen(multiboot_info_t *mb_info) {
+void clear_screen() {
 	// Disable interrupts during framebuffer write to prevent corruption
 	asm volatile("cli");
 	
 	uint32_t *fb = (uint32_t *)framebuffer_address;
-	uint32_t VGA_WIDTH = mb_info->framebuffer_width;
-	uint32_t VGA_HEIGHT = mb_info->framebuffer_height;
-	uint32_t pitch = mb_info->framebuffer_pitch / 4;
+	uint32_t VGA_WIDTH = multiboot_info->framebuffer_width;
+	uint32_t VGA_HEIGHT = multiboot_info->framebuffer_height;
+	uint32_t pitch = multiboot_info->framebuffer_pitch / 4;
 
 	// Safety check: ensure we don't write beyond framebuffer
 	if (fb == NULL || VGA_WIDTH == 0 || VGA_HEIGHT == 0) {
@@ -337,29 +357,11 @@ void terminal_init(multiboot_info_t *mb_info) {
 	VGA_HEIGHT = mb_info->framebuffer_height;
 }
 */
-#define FONT8X16
 
-#ifdef FONT8X8
-#define CHAR_SIZE 8
-#define SCALE 2
-#define CHAR_WIDTH (CHAR_SIZE * SCALE)
-#define CHAR_HEIGHT (CHAR_SIZE * SCALE)
-#define FONT_H 8
-#define FONT_W 8
-#endif
-#ifdef FONT8X16
-#define CHAR_SIZE 8
-#define SCALE 2
-#define CHAR_WIDTH 8 * SCALE
-#define CHAR_HEIGHT 16 * SCALE
-#define FONT_H 16
-#define FONT_W 8
-#endif
-
-void scroll_framebuffer(multiboot_info_t *mb_info) {
+void scroll_framebuffer() {
     uint32_t *fb = (uint32_t *)framebuffer_address;
-    int fb_width = mb_info->framebuffer_width;
-    int fb_height = mb_info->framebuffer_height;
+    int fb_width = multiboot_info->framebuffer_width;
+    int fb_height = multiboot_info->framebuffer_height;
 
     int scroll_pixels = CHAR_HEIGHT;
 
@@ -385,9 +387,9 @@ void scroll_framebuffer(multiboot_info_t *mb_info) {
 
 bool shell_mode = false;
 
-void print_char(char c, multiboot_info_t *mb_info) {
-	uint32_t VGA_WIDTH = mb_info->framebuffer_width;
-	uint32_t VGA_HEIGHT = mb_info->framebuffer_height;
+void print_char(char c) {
+	uint32_t VGA_WIDTH = multiboot_info->framebuffer_width;
+	uint32_t VGA_HEIGHT = multiboot_info->framebuffer_height;
     if (c == '\n') {
         if(shell_mode == true) {
     	    terminal_x = 1;
@@ -409,11 +411,11 @@ void print_char(char c, multiboot_info_t *mb_info) {
                 terminal_x = CHAR_WIDTH;
             }
     	// hapus karakter di posisi sebelumnya
-    	for (int y = 0; y < CHAR_HEIGHT; y++) {
-        		for (int x = 0; x < CHAR_WIDTH; x++) {
+    	for (int y = 0; y < FONT_H; y++) {
+        		for (int x = 0; x < FONT_W; x++) {
             		for (int dy = 0; dy < SCALE; dy++) {
                 			for (int dx = 0; dx < SCALE; dx++) {
-                    			draw_pixel(mb_info, terminal_x + x*SCALE + dx, terminal_y + y*SCALE + dy, 0x00000000);
+                    			draw_pixel(terminal_x + x*SCALE + dx, terminal_y + y*SCALE + dy, 0x00000000);
                 			}
             		}
         		}
@@ -426,7 +428,7 @@ void print_char(char c, multiboot_info_t *mb_info) {
     	terminal_y += CHAR_HEIGHT;
     }
     if (terminal_y + CHAR_HEIGHT > VGA_HEIGHT) {
-		scroll_framebuffer(mb_info);
+		scroll_framebuffer();
     }
 	if(c >= 0 && c < 128 && c != '\n' && c != '\b') {
 		// gambar karakter
@@ -444,7 +446,7 @@ void print_char(char c, multiboot_info_t *mb_info) {
             			if (bitmap[y] & (1 << (7-x))) {
                 			for (int dy = 0; dy < SCALE; dy++) {
                     				for (int dx = 0; dx < SCALE; dx++) {
-                        				draw_pixel(mb_info, terminal_x + x*SCALE + dx, terminal_y + y*SCALE + dy, 0xFFFFFFFF);
+                        				draw_pixel(terminal_x + x*SCALE + dx, terminal_y + y*SCALE + dy, 0xFFFFFFFF);
                     				}
                 			}
             			}
@@ -453,7 +455,7 @@ void print_char(char c, multiboot_info_t *mb_info) {
             			if (bitmap[y] & (1 << x)) {
                 			for (int dy = 0; dy < SCALE; dy++) {
                     				for (int dx = 0; dx < SCALE; dx++) {
-                        				draw_pixel(mb_info, terminal_x + x*SCALE + dx, terminal_y + y*SCALE + dy, 0xFFFFFFFF);
+                        				draw_pixel(terminal_x + x*SCALE + dx, terminal_y + y*SCALE + dy, 0xFFFFFFFF);
                     				}
                 			}
             			}
@@ -471,15 +473,15 @@ void print_char(char c, multiboot_info_t *mb_info) {
 }
 
 
-void kprint(char* str, multiboot_info_t *mb_info) {
+void kprint(char* str) {
 	int i = 0;
 	while(str[i]) {
-		print_char(str[i], mb_info);
+		print_char(str[i]);
 		i++;
 	}
 }
 
-void kprint_hex(uintptr_t value, multiboot_info_t *mb_info) {
+void kprint_hex(uintptr_t value) {
     char buffer[17]; // 16 digit + null untuk 64-bit, cukup juga untuk 32-bit
     const char *hex_chars = "0123456789ABCDEF";
 
@@ -497,5 +499,5 @@ void kprint_hex(uintptr_t value, multiboot_info_t *mb_info) {
 
     buffer[i] = '\0';
 
-    kprint(buffer, mb_info); // pakai fungsi print string yang sudah kamu punya
+    kprint(buffer); // pakai fungsi print string yang sudah kamu punya
 }

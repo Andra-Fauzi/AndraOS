@@ -313,13 +313,13 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
                 l->defined = true;
                 char buf[128];
                 to_string(current_addr, buf);
-                kprint("Defined label: ", multiboot_info);
-                kprint(mnemonic, multiboot_info);
-                kprint(" at ", multiboot_info);
-                kprint(buf, multiboot_info);
-                kprint(" (hex: ", multiboot_info);
-                kprint_hex(current_addr, multiboot_info);
-                kprint(")\n", multiboot_info);
+                kprint("Defined label: ");
+                kprint(mnemonic);
+                kprint(" at ");
+                kprint(buf);
+                kprint(" (hex: ");
+                kprint_hex(current_addr);
+                kprint(")\n");
             }
         }
         return 0;
@@ -447,31 +447,28 @@ int process_instruction(const char *line, uint8_t **buf, uint32_t current_addr, 
         else {
             emit_u8(buf, 0xE8);
             int32_t diff = 0;
-            kprint("nama label : ", multiboot_info);
-            kprint(op1.label_name, multiboot_info);
-            kprint("\n", multiboot_info);
             AsmLabel *l = find_label(op1.label_name);
             if (pass == 2) {
                 if (!l || !l->defined) {
-                    kprint("undefined label :", multiboot_info);
-                    kprint(op1.label_name, multiboot_info);
-                    kprint("\n", multiboot_info);
+                    kprint("undefined label :");
+                    kprint(op1.label_name);
+                    kprint("\n");
                     exit(1);
                 }
 
                 char buffer[512];
                 to_string(l->address, buffer);
-                kprint("ini address untuk ke label atau function :", multiboot_info);
-                kprint_hex(l->address, multiboot_info);
-                kprint("\n", multiboot_info);
+                kprint("ini address untuk ke label atau function :");
+                kprint_hex(l->address);
+                kprint("\n");
                 to_string(current_addr, buffer);
-                kprint("ini address saat ini:", multiboot_info);
-                kprint_hex(current_addr, multiboot_info);
-                kprint("\n", multiboot_info);
+                kprint("ini address saat ini:");
+                kprint_hex(current_addr);
+                kprint("\n");
                 diff = (int32_t)((int32_t)l->address) - (int32_t)((int32_t)current_addr + 5);
-                kprint("ini address yang dituju:", multiboot_info);
-                kprint_hex(diff, multiboot_info);
-                kprint("\n", multiboot_info);
+                kprint("ini address yang dituju:");
+                kprint_hex(diff);
+                kprint("\n");
             }
             emit_u32(buf, diff);
 
