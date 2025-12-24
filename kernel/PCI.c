@@ -121,6 +121,17 @@ void pci_scan_RTL8139() {
 	    return;
     }
 
+    uint8_t header = (uint8_t)pciConfigReadWord(rtl_bus, rtl_slot, rtl_func, 0xA);
+    if(header == 0x0) {
+	    kprint("header type 0x0\n");
+    } else if(header == 0x1) {
+	    kprint("header type 0x1\n");
+    } else if(header == 0x2) {
+	    kprint("header type 0x2\n");
+    } else {
+	    kprint("gak tau lah\n");
+    }
+
     uint32_t bar0 = 
 	    pciConfigReadWord(rtl_bus, rtl_slot, rtl_func, 0x10) |
 	    (pciConfigReadWord(rtl_bus, rtl_slot, rtl_func, 0x12) << 16);

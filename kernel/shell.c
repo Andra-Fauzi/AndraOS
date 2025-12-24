@@ -34,6 +34,8 @@ void init_shell() {
 	add_args("cat", c_cat, 3);
 	add_args("createfile", c_create_file, 10);
 	add_args("as", c_as, 2);
+	kprint(current_dir);
+	print_char('>');
 }
 
 char shell_getchar() {
@@ -107,10 +109,7 @@ void shell_run() {
 	if(shell_mode == false) {
 		return;
 	}
-	if(terminal_x < 1 && terminal_y) {
-		kprint(current_dir);
-		print_char('>');
-	}
+	
 	char character;
 	while((character = shell_getchar()) == -1) {
 		asm volatile("hlt");

@@ -4,7 +4,7 @@ CC := i686-elf-gcc
 AS := i686-elf-as
 LD := i686-elf-ld
 
-CFLAGS := -g -std=gnu99 -ffreestanding -O0 -Wall -Wextra -m32 -I./boot -I./kernel -I./drivers -I./lib
+CFLAGS := -g -std=gnu99 -ffreestanding -O0 -Wall -Wextra -m32 -I./boot -I./kernel -I./drivers -I./lib -I./uACPI/include
 ASFLAGS := -g
 LDFLAGS := -T boot/linker.ld -O0 -nostdlib -m elf_i386
 
@@ -13,7 +13,8 @@ CHIBICC_DIR := chibicc-main
 CHIBICC_SRCS := codegen.c hashmap.c main.c parse.c preprocess.c strings.c tokenize.c type.c unicode.c
 CHIBICC_C_SOURCES := $(addprefix $(CHIBICC_DIR)/, $(CHIBICC_SRCS))
 
-C_SOURCES := $(shell find boot kernel drivers lib -name '*.c' -not -path '$(CHIBICC_DIR)/*') $(CHIBICC_C_SOURCES)
+
+C_SOURCES := $(shell find boot kernel drivers lib uACPI -name '*.c' -not -path '$(CHIBICC_DIR)/*') $(CHIBICC_C_SOURCES)
 ASM_SOURCES := $(shell find boot kernel drivers lib -name '*.asm')
 
 OBJ_C := $(patsubst %.c, obj/%.o, $(C_SOURCES))

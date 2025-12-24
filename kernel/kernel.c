@@ -19,6 +19,7 @@
 #include "userland.h"
 #include "apic.h"
 #include "PCI.h"
+#include "acpi.h"
 
 #if defined(__linux__)
 #error "You are not using cross compiler you will run to some trouble"
@@ -100,6 +101,9 @@ void kernel_main(multiboot_info_t *mb_info) {
 	init_fat16();
 	kprint("test network\n");
 	pci_scan_RTL8139();
+	kprint("\n");
+	kprint("run testacpi\n");
+	//testacpi();
 	for (;;) {
 		shell_run();
 		asm volatile("hlt");
