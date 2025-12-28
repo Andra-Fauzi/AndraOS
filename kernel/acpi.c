@@ -1,5 +1,6 @@
 #include "acpi.h"
 #include <uacpi/kernel_api.h>
+#include <uacpi/uacpi.h>
 #include "PCI.h"
 #include "port_io.h"
 #include "memory.h"
@@ -119,8 +120,15 @@ void uacpi_kernel_unmap(void *addr, uacpi_size len) {
 	
 	// Unmap all pages
 	for(uacpi_size j = 0; j < len_aligned; j += PAGE_SIZE) {
-		unmap_page(aligned_addr + j);
+		// unmap_page(aligned_addr + j);
+		// FIX: Do NOT unmap ACPI tables.
+		// Reasoning: uACPI may map two small tables (A and B) that reside on the same physical page.
+		// If it unmaps A, the entire page is removed, making B inaccessible.
+		// Since ACPI tables are essentially static BIOS/MMIO data, it is safe to keep them mapped indefinitely.
+		
+		(void)aligned_addr; // suppress unused warning
 	}
+	printf("uACPI unmap SKIPPED (preserved for safety)\n");
 }
 
 #ifndef UACPI_FORMATTED_LOGGING
@@ -182,13 +190,17 @@ uacpi_u64 uacpi_kernel_get_nanoseconds_since_boot(void) {
 }
 
 void uacpi_kernel_stall(uacpi_u8 usec) {
-	// Busy-wait delay untuk microseconds
-	// Gunakan PIT atau RDTSC untuk timing yang lebih akurat
-	// Implementasi sederhana: loop based
-	uint64_t target = system_ticks + ((usec + 999) / 1000);
-	while(system_ticks < target) {
-		__asm__ volatile("pause");
-	}
+	// Busy-wait delay for microseconds using port I/O (approx 1-2us per IO)
+	// This avoids dependency on timer interrupts which might be disabled or too slow (1ms resolution)
+	// for very short stalls required by hardware init sequences.
+	
+	// Assuming ~1 microsecond per outb(0x80) on modern-ish hardware emulation, 
+	// or at least safe enough to prevent "too fast" execution.
+	// For better precision, we should calibrate a loop, but this is a standard "IO Wait".
+	
+	for (uacpi_u8 i = 0; i < usec; i++) {
+        	outb(0x80, 0); 
+    	}
 }
 
 void uacpi_kernel_sleep(uacpi_u64 msec) {
@@ -670,12 +682,66 @@ void *uacpi_memcpy(void *dest, const void *src, uacpi_size count) {
 	return dest;
 }
 
+// ============================================================================
+// Initialization
+// ============================================================================
+
+void init_acpi_subsystem(void) {
+	kprint("Init uACPI Subsystem...\n");
+	
+	// Note: We DO NOT disable interrupts here.
+	// uacpi_initialize (specifically stall) may depend on timers or other
+	// hardware that needs interrupts (or we busy wait without disabling).
+	// If the kernel is single-threaded at this point, re-entrancy is not an issue.
+
+	uacpi_status status = uacpi_initialize(0);
+	if (status != UACPI_STATUS_OK) {
+		kprint("uACPI init failed: ");
+		kprint_hex(status);
+		kprint("\n");
+		return;
+	}
+	
+	kprint("uACPI initialized successfully!\n");
+	
+	// Load ACPI namespace (parse AML tables)
+	status = uacpi_namespace_load();
+	if (status != UACPI_STATUS_OK) {
+		kprint("ACPI namespace load failed: ");
+		kprint_hex(status);
+		kprint("\n");
+		return;
+	}
+	
+	kprint("ACPI namespace loaded!\n");
+		
+	// Initialize ACPI namespace (execute _INI, _STA methods, etc)
+	status = uacpi_namespace_initialize();
+	if (status != UACPI_STATUS_OK) {
+		kprint("ACPI namespace init failed: ");
+		kprint_hex(status);
+		kprint("\n");
+		return;
+	}
+
+	kprint("ACPI namespace initialized!\n");
+}
+
 void testacpi() {
 	find_RSDP();
 	if(found_rsdp != NULL) {
-		kprint("\n");
+		kprint("\nRSDP Signature: ");
 		kprint(found_rsdp->Signature);
-		kprint("\n");
+        kprint("\nACPI Version: ");
+        if (found_rsdp->Revision == 0) {
+            kprint("1.0\n");
+        } else if (found_rsdp->Revision >= 2) {
+            kprint("2.0+\n");
+        } else {
+            kprint("Unknown (");
+            kprint_hex(found_rsdp->Revision);
+            kprint(")\n");
+        }
 		kprint("ketemu cuy\n");
 	}
 }

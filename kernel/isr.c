@@ -47,9 +47,35 @@ void isr_handler(struct regs *r) {
 		return;
 	}
 	
+	if (r->int_no == 14) {
+		uint32_t cr2;
+		asm volatile("mov %%cr2, %0" : "=r"(cr2));
+		printf("\nPAGE FAULT (Int 14) at 0x%x\n", cr2);
+		printf("EIP: 0x%x  Error Code: 0x%x\n", r->eip, r->err_code);
+		printf("EFLAGS: 0x%x  CS: 0x%x\n", r->eflags, r->cs);
+		
+		uint32_t present = !(r->err_code & 0x1);
+		uint32_t rw = r->err_code & 0x2;
+		uint32_t us = r->err_code & 0x4;
+		uint32_t reserved = r->err_code & 0x8;
+		uint32_t id = r->err_code & 0x10;
+		
+		printf("Reason: %s %s %s %s %s\n",
+			present ? "Page Not Present" : "Page Protection Violation",
+			rw ? "Write" : "Read",
+			us ? "User-mode" : "Kernel-mode",
+			reserved ? "Reserved Bit violation" : "",
+			id ? "Instruction Fetch" : ""
+		);
+		
+		error_isr = true;
+		for(;;) asm("hlt");
+	}
+
 	// kprint("interrupt terjadi");
 	if(error_isr == false) {
 		printf("Interrupt terjadi no: %d\n", r->int_no);
+		printf("EIP: 0x%x\n", r->eip);
 		error_isr = true;
 	}
 }

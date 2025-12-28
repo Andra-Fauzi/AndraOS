@@ -86,18 +86,12 @@ void kernel_main(multiboot_info_t *mb_info) {
 	asm volatile("sti");
 	// Inisialisasi uACPI library
 	// asm volatile("cli");
-	// kprint("Init APIC\n");
-	// init_apic();
 	// asm volatile("sti");
 	//initTasking();
 	//init_paging();
 	
-
-	// extern void init_keyboard();
 	
-	// kprint("Init Keyboard\n");
-	// init_keyboard();
-
+	
 	kprint("Init Shell\n");
 	init_shell();
 	
@@ -109,44 +103,25 @@ void kernel_main(multiboot_info_t *mb_info) {
 	
 	// Disable interrupts selama uACPI initialization
 	// karena parsing AML tables tidak re-entrant safe
-	kprint("Init uACPI...\n");
-	asm volatile("cli");
+	// kprint("Init uACPI...\n");
+	// asm volatile("cli");
 	
-	uacpi_status status = uacpi_initialize(0);
-	if (status == UACPI_STATUS_OK) {
-		kprint("uACPI initialized successfully!\n");
-		
-		// Load ACPI namespace (parse AML tables)
-		status = uacpi_namespace_load();
-		if (status == UACPI_STATUS_OK) {
-			kprint("ACPI namespace loaded!\n");
-			
-			// Initialize ACPI namespace (execute _INI, _STA methods, etc)
-			status = uacpi_namespace_initialize();
-			if (status == UACPI_STATUS_OK) {
-				kprint("ACPI namespace initialized!\n");
-			} else {
-				kprint("ACPI namespace init failed: ");
-				kprint_hex(status);
-				kprint("\n");
-			}
-		} else {
-			kprint("ACPI namespace load failed: ");
-			kprint_hex(status);
-			kprint("\n");
-		}
-	} else {
-		kprint("uACPI init failed: ");
-		kprint_hex(status);
-		kprint("\n");
-	}
+	init_acpi_subsystem();
+	
+	kprint("Init APIC\n");
+	init_apic();
+	
+	extern void init_keyboard();
+	
 	
 	// Re-enable interrupts setelah uACPI selesai
-	asm volatile("sti");
-	kprint("Interrupts re-enabled\n");
+	// asm volatile("sti");
+	// kprint("Interrupts re-enabled\n");
 	kprint("run testacpi\n");
 	testacpi();
 	
+	kprint("Init Keyboard\n");
+	init_keyboard();
 	
 	for (;;) {
 		shell_run();

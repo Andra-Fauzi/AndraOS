@@ -17,6 +17,8 @@
 #include "tools_command/create_file.h"
 #include "tools_command/as.h"
 #include "tools_command/compile.h"
+#include "tools_command/shutdown.h"
+#include "tools_command/reboot.h"
 
 typedef struct {
 	char name[255];

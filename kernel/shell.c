@@ -34,6 +34,8 @@ void init_shell() {
 	add_args("cat", c_cat, 3);
 	add_args("createfile", c_create_file, 10);
 	add_args("as", c_as, 2);
+	add_args("shutdown", c_shutdown, 8);
+	add_args("reboot", c_reboot, 6);
 	kprint(current_dir);
 	print_char('>');
 }

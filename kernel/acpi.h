@@ -4,6 +4,7 @@
 
 void testacpi();
 void uacpi_tick_increment(void);
+void init_acpi_subsystem(void);
 
 typedef struct {
  char Signature[8];
