@@ -20,6 +20,7 @@
 #include "apic.h"
 #include "PCI.h"
 #include "acpi.h"
+#include <uacpi/uacpi.h>
 
 #if defined(__linux__)
 #error "You are not using cross compiler you will run to some trouble"
@@ -78,32 +79,77 @@ void kernel_main(multiboot_info_t *mb_info) {
 	heap_init();
 	kprint("Init IRQ\n");
 	irq_install();
-	kprint("Init APIC\n");
-	init_apic();
+	kprint("Init Timer\n");
+	extern void init_timer(uint32_t frequency);
+	init_timer(10);
 	kprint("Enable Interrupt\n");
 	asm volatile("sti");
+	// Inisialisasi uACPI library
+	// asm volatile("cli");
+	// kprint("Init APIC\n");
+	// init_apic();
+	// asm volatile("sti");
 	//initTasking();
 	//init_paging();
+	
 
-
-	extern void init_keyboard();
-	extern void init_timer(uint32_t frequency);
-
-	kprint("Init Keyboard\n");
-	init_keyboard();
-	kprint("Init Timer\n");
-	init_timer(10);
+	// extern void init_keyboard();
+	
+	// kprint("Init Keyboard\n");
+	// init_keyboard();
 
 	kprint("Init Shell\n");
 	init_shell();
 	
 	kprint("Init FAT16\n");
 	init_fat16();
-	kprint("test network\n");
-	pci_scan_RTL8139();
-	kprint("\n");
+	// kprint("test network\n");
+	// pci_scan_RTL8139();
+	// kprint("\n");
+	
+	// Disable interrupts selama uACPI initialization
+	// karena parsing AML tables tidak re-entrant safe
+	kprint("Init uACPI...\n");
+	asm volatile("cli");
+	
+	uacpi_status status = uacpi_initialize(0);
+	if (status == UACPI_STATUS_OK) {
+		kprint("uACPI initialized successfully!\n");
+		
+		// Load ACPI namespace (parse AML tables)
+		status = uacpi_namespace_load();
+		if (status == UACPI_STATUS_OK) {
+			kprint("ACPI namespace loaded!\n");
+			
+			// Initialize ACPI namespace (execute _INI, _STA methods, etc)
+			status = uacpi_namespace_initialize();
+			if (status == UACPI_STATUS_OK) {
+				kprint("ACPI namespace initialized!\n");
+			} else {
+				kprint("ACPI namespace init failed: ");
+				kprint_hex(status);
+				kprint("\n");
+			}
+		} else {
+			kprint("ACPI namespace load failed: ");
+			kprint_hex(status);
+			kprint("\n");
+		}
+	} else {
+		kprint("uACPI init failed: ");
+		kprint_hex(status);
+		kprint("\n");
+	}
+	
+	// Re-enable interrupts setelah uACPI selesai
+	asm volatile("sti");
+	kprint("Interrupts re-enabled\n");
 	kprint("run testacpi\n");
-	//testacpi();
+	testacpi();
+	
+	
+	char *jawa = "sigma";
+	printf("jawa adalah %s\n", jawa);
 	for (;;) {
 		shell_run();
 		asm volatile("hlt");

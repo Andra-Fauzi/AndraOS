@@ -3,6 +3,7 @@
 #include "irq.h"
 
 void testacpi();
+void uacpi_tick_increment(void);
 
 typedef struct {
  char Signature[8];

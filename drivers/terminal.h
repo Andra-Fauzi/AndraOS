@@ -5,6 +5,7 @@
 #include "shell.h"
 #include "multiboot_header.h"
 #include "kernel_state.h"
+#include <stdarg.h>
 
 //void clear_line(int line);
 void clear_screen();
@@ -13,3 +14,4 @@ void kprint(char* str);
 void draw_pixel(int x, int y, uint32_t color);
 void terminal_init();
 void kprint_hex(uintptr_t value);
+void printf(const char* fmt, ...);

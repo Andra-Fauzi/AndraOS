@@ -1,12 +1,37 @@
 #include "util.h"
 
-void memcpy(void *dest, const void *src, size_t n) {
+// Internal basic memcpy without mapping
+static void _memcpy_internal(void *dest, const void *src, size_t n) {
     const unsigned char *s = (const unsigned char *)src;
     unsigned char *d = (unsigned char *)dest;
-
+    
     for (size_t i = 0; i < n; i++) {
         d[i] = s[i];
     }
+}
+
+// Public memcpy with ACPI address mapping support
+void memcpy(void *dest, const void *src, size_t n) {
+    if (n == 0) return;
+    
+    // // Import map_page from paging
+    // extern uint32_t map_page(uint32_t virtual_address, uint32_t physical_address, uint32_t flags);
+    
+    // // Map source address if it looks like unmapped physical ACPI memory
+    // // (addresses below 256MB that might be ACPI tables)
+    // uint32_t src_addr = (uint32_t)src;
+    // if (src_addr < 0x10000000 && src_addr >= 0x00100000) {
+    //     // Likely ACPI table in low physical memory - ensure it's mapped
+    //     uint32_t page_start = src_addr & ~0xFFF;
+    //     uint32_t page_end = (src_addr + n + 0xFFF) & ~0xFFF;
+        
+    //     for (uint32_t addr = page_start; addr < page_end; addr += 0x1000) {
+    //         map_page(addr, addr, 0x003); // PTE_PRESENT | PTE_WRITE
+    //     }
+    // }
+    
+    // Now safe to copy
+    _memcpy_internal(dest, src, n);
 }
 
 

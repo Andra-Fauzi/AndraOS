@@ -39,10 +39,17 @@ void isr_install() {
 
 extern multiboot_info_t *multiboot_info;
 
+bool error_isr = false;
+
 void isr_handler(struct regs *r) {
 	if (r->int_no == 128) {
 		syscall_handler(r);
 		return;
 	}
-	kprint("interrupt terjadi");
+	
+	// kprint("interrupt terjadi");
+	if(error_isr == false) {
+		printf("Interrupt terjadi no: %d\n", r->int_no);
+		error_isr = true;
+	}
 }

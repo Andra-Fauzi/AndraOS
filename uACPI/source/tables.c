@@ -18,7 +18,6 @@ static uacpi_table_installation_handler installation_handler;
 #ifndef UACPI_BAREBONES_MODE
 
 static uacpi_handle table_mutex;
-
 #define ENSURE_TABLES_ONLINE()                         \
     do {                                               \
         if (!early_table_access)                       \

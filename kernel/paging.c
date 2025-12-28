@@ -89,7 +89,17 @@ uint32_t map_page(uint32_t virtual_address, uint32_t physical_address, uint32_t 
         if (pt_virt == 0)
             return 0; // out of memory
 
-        uint32_t pt_phys = pt_virt - KERNEL_BASE; // convert ke fisik
+        // Convert virtual ke physical
+        // alloc_page() returns higher-half address (0xC0000000+)
+        // so we use virt_to_phys which subtracts KERNEL_BASE
+        uint32_t pt_phys;
+        if (pt_virt >= KERNEL_BASE) {
+            // Higher-half address dari alloc_page()
+            pt_phys = pt_virt - KERNEL_BASE;
+        } else {
+            // Identity mapped address (untuk compatibility)
+            pt_phys = pt_virt;
+        }
 
         memset((void*)pt_virt, 0, PAGE_SIZE);
 
@@ -109,6 +119,29 @@ uint32_t map_page(uint32_t virtual_address, uint32_t physical_address, uint32_t 
     return virtual_address;
 }
 
+void unmap_page(uint32_t virtual_address) {
+    uint32_t dir_index = (virtual_address >> 22) & 0x3FF;
+    uint32_t table_index = (virtual_address >> 12) & 0x3FF;
+
+    uint32_t *pd = (uint32_t *)&boot_page_directory;
+
+    // Jika page table belum ada
+    if (!(pd[dir_index] & 0x1)) {
+	    return; // out of memory
+    }
+
+    // Ambil pointer ke page table (virtual)
+    uint32_t *pt = phys_to_virt(pd[dir_index] & ~0xFFF);
+
+    if(!(pt[table_index] & 0x1)) {
+	    return;
+    }
+    pt[table_index] = 0;
+
+    // Flush TLB
+    asm volatile("invlpg (%0)" :: "r"(virtual_address) : "memory");
+
+}
 // # BROKEN, DONT USE IT
 // void init_paging() {
 //     // Bersihkan semua entry

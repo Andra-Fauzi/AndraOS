@@ -1,5 +1,6 @@
 
 #include "irq.h"
+#include "acpi.h"
 
 #define IRQ_BASE 32
 
@@ -32,9 +33,15 @@ void irq_handler(struct regs *r) {
 
 	if(irq == 0 && ismultitasking == true) {
 		// kprint("timer call", multiboot_info);
+		uacpi_tick_increment(); // Update ACPI timer ticks
 		send_eoi(0);
 		switch_context(r);
 		return; // Prevent double send_eoi
+	}
+	
+	// Timer tick untuk ACPI bahkan jika multitasking belum aktif
+	if(irq == 0) {
+		uacpi_tick_increment();
 	}
 
 	if(irq < 16 && irq_routines[irq]) {

@@ -45,3 +45,4 @@ uint32_t get_physical_address(uint32_t virtual_address);
 void disable_paging();
 void invalidate_tlb(uint32_t virtual_address);
 void map_page_custom_page_dir(uint32_t *page_dir, uint32_t virtual_address, uint32_t physical_address, uint32_t flags);
+void unmap_page(uint32_t virtual_address);

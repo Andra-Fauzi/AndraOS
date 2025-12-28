@@ -501,3 +501,57 @@ void kprint_hex(uintptr_t value) {
 
     kprint(buffer); // pakai fungsi print string yang sudah kamu punya
 }
+
+void putchar(char c) {
+	print_char(c);
+}
+
+void puts(char *str) {
+	kprint(str);
+}
+
+void print_dec(int value) {
+	char buffer[255];
+	to_string(value, buffer);
+	kprint(buffer);
+}
+
+void print_hex(uint32_t hex) {
+	kprint_hex(hex);
+}
+
+void printf(const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+
+    while (*fmt) {
+        if (*fmt == '%') {
+            fmt++;
+            switch (*fmt) {
+                case 'c':
+                    putchar(va_arg(args, char));
+                    break;
+                case 's':
+                    puts(va_arg(args, char*));
+                    break;
+                case 'd':
+                    print_dec(va_arg(args, int));
+                    break;
+                case 'x':
+                    print_hex(va_arg(args, uint32_t));
+                    break;
+                case '%':
+                    putchar('%');
+                    break;
+                default:
+                    putchar('?');
+            }
+        } else {
+            putchar(*fmt);
+        }
+        fmt++;
+    }
+
+    va_end(args);
+}
+

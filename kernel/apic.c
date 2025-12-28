@@ -152,3 +152,6 @@ void ioapic_enable_keyboard() {
 	ioapic_write(0x10 + irq * 2, low);
 	ioapic_write(0x10 + irq * 2 + 1, high);
 }
+
+void ioapic_enable_timer() {
+}
