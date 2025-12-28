@@ -148,8 +148,6 @@ void kernel_main(multiboot_info_t *mb_info) {
 	testacpi();
 	
 	
-	char *jawa = "sigma";
-	printf("jawa adalah %s\n", jawa);
 	for (;;) {
 		shell_run();
 		asm volatile("hlt");
